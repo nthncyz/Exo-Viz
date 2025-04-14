@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoRoT-2 System - Optimized Realism (Final)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto:wght@300;400&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-gradient-start: #03050a; --bg-gradient-end: #000000; --panel-bg: rgba(25, 35, 65, 0.7); --panel-border: rgba(110, 160, 255, 0.35); --panel-glow: rgba(130, 190, 255, 0.6); --text-primary: #e8f0ff; --text-secondary: #a8b8d8; --header-color: #90d8ff; --accent-color: #ffd870; --highlight-color: #ff9090; --button-bg: rgba(70, 90, 130, 0.7); --button-hover-bg: rgba(90, 110, 150, 0.9); --button-border: rgba(110, 160, 255, 0.5); --label-color: #ffffff; --ui-scale: 0.6; /* Default scale for desktop */
+        }
+        body { margin: 0; overflow: hidden; background: var(--bg-gradient-end); color: var(--text-primary); font-family: 'Roboto', sans-serif; font-weight: 300; cursor: default; }
+        canvas { display: block; position: relative; z-index: 1; }
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-gradient-end); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.5s ease-out; opacity: 1; }
+        #loading-overlay.hidden { opacity: 0; pointer-events: none; }
+        .loader { border: 5px solid var(--panel-border); border-top: 5px solid var(--header-color); border-radius: 50%; width: calc(50px * var(--ui-scale)); height: calc(50px * var(--ui-scale)); animation: spin 1s linear infinite; margin-bottom: calc(20px * var(--ui-scale)); }
+        #loading-text { font-family: 'Orbitron', sans-serif; font-size: calc(1.2em * var(--ui-scale)); color: var(--header-color); letter-spacing: calc(2px * var(--ui-scale)); text-align: center; padding: 0 calc(20px * var(--ui-scale)); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #ui-container { 
+            position: absolute; 
+            top: calc(10px * var(--ui-scale));
+            left: calc(10px * var(--ui-scale));
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap;
+            gap: calc(10px * var(--ui-scale));
+            max-width: calc(60vw);
+            max-height: calc(100vh - (20px * var(--ui-scale)));
+
+            /* Constraint to prevent overlap with right panel */
+            max-width: 35%;
+
+            z-index: 10;
+            opacity: 0;
+            animation: fadeIn 1s ease-out 0.5s forwards;
+            pointer-events: none;
+        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .info-panel { 
+            background-color: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: calc(5px * var(--ui-scale));
+            padding: calc(10px * var(--ui-scale));
+            flex-basis: calc(360px * var(--ui-scale)); 
+            flex-grow: 1; 
+            box-shadow: 0 0 calc(8px * var(--ui-scale)) rgba(100, 150, 255, 0.06), 0 calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale)) rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(calc(5px * var(--ui-scale)));
+            -webkit-backdrop-filter: blur(calc(5px * var(--ui-scale)));
+            position: relative;
+            overflow: hidden;
+            transition: box-shadow 0.3s ease;
+            pointer-events: auto;
+        }
+        .info-panel::before { 
+            content: ''; position: absolute; top: -1px; left: -1px; right: -1px; bottom: -1px;
+            border-radius: calc(6px * var(--ui-scale));
+            border: 1px solid transparent;
+            box-shadow: 0 0 0 1px var(--panel-glow);
+            opacity: 0.15;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        .info-panel:hover::before { opacity: 0.35; } 
+        .info-panel h2, .info-panel h3 { 
+            font-family: 'Orbitron', sans-serif;
+            color: var(--header-color);
+            margin-top: 0;
+            margin-bottom: calc(6px * var(--ui-scale)); 
+            letter-spacing: calc(0.2px * var(--ui-scale));
+            font-weight: 400;
+        }
+        .info-panel h2 { font-size: calc(1.15em * var(--ui-scale)); } 
+        .info-panel h3 { font-size: calc(0.95em * var(--ui-scale)); margin-top: calc(10px * var(--ui-scale)); color: var(--accent-color); }
+        .info-panel p { 
+            margin: calc(3px * var(--ui-scale)) 0; 
+            font-size: calc(0.85em * var(--ui-scale)); 
+            line-height: 1.3; 
+            color: var(--text-primary);
+        }
+        .info-panel p strong { color: var(--text-primary); font-weight: 400; } .info-panel a { color: var(--accent-color); text-decoration: none; } .info-panel a:hover { text-decoration: underline; }
+        #planet-list-content strong { font-size: 0.95em; } 
+        .planet-info { 
+            font-size: 0.75em; 
+            color: var(--text-secondary); 
+            margin-left: calc(4px * var(--ui-scale));
+        }
+        #light-curve-container { 
+            margin-top: calc(5px * var(--ui-scale)); 
+            width: 100%; 
+            height: calc(30px * var(--ui-scale)); 
+            background-color: rgba(0, 0, 0, 0.3); 
+            border: 1px solid var(--panel-border); 
+            position: relative; 
+            overflow: hidden; 
+            border-radius: calc(3px * var(--ui-scale)); 
+        }
+        #light-curve-bar { position: absolute; bottom: 0; left: 0; width: 100%; height: 100%; background-color: #ffdd55; transition: height 0.15s ease-out, background-color 0.15s ease-out; }
+        .controls button { background-color: var(--button-bg); color: var(--text-primary); border: 1px solid var(--button-border); padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale)); margin-right: calc(8px * var(--ui-scale)); margin-bottom: calc(8px * var(--ui-scale)); cursor: pointer; border-radius: calc(5px * var(--ui-scale)); font-family: 'Roboto', sans-serif; font-size: calc(0.9em * var(--ui-scale)); transition: background-color 0.2s ease, transform 0.1s ease, box-shadow 0.2s ease; box-shadow: 0 calc(2px * var(--ui-scale)) calc(4px * var(--ui-scale)) rgba(0,0,0,0.2); }
+        .controls button:hover { background-color: var(--button-hover-bg); transform: scale(1.05); box-shadow: 0 0 calc(10px * var(--ui-scale)) rgba(120, 180, 255, 0.3), 0 calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale)) rgba(0,0,0,0.3); }
+        .controls button:active { transform: scale(1.0); } .controls button.active { background-color: var(--accent-color); color: #000; box-shadow: inset 0 calc(1px * var(--ui-scale)) calc(3px * var(--ui-scale)) rgba(0,0,0,0.4); }
+        #instructions { position: absolute; bottom: calc(15px * var(--ui-scale)); right: calc(45px * var(--ui-scale)); font-size: calc(0.85em * var(--ui-scale)); color: var(--text-secondary); text-align: right; background-color: rgba(0,0,0,0.7); padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale)); border-radius: calc(5px * var(--ui-scale)); z-index: 5; border: 1px solid var(--panel-border); pointer-events: none; }
+        .highlight { color: var(--highlight-color); font-weight: bold; }
+        .expandable-header { cursor: pointer; display: flex; justify-content: space-between; align-items: center; } .expandable-header::after { content: '▼'; font-size: calc(0.7em * var(--ui-scale)); transition: transform 0.3s ease; } .expandable-header.collapsed::after { transform: rotate(-90deg); }
+        .expandable-content { max-height: calc(500px * var(--ui-scale)); overflow: hidden; transition: max-height 0.4s ease-out; } .expandable-content.collapsed { max-height: 0; margin-top: 0; padding-top: 0; }
+        .object-label { position: absolute; top: 0; left: 0; color: var(--text-primary); background-color: rgba(10, 15, 30, 0.75); border: 1px solid rgba(120, 180, 255, 0.5); border-radius: calc(4px * var(--ui-scale)); padding: calc(4px * var(--ui-scale)) calc(9px * var(--ui-scale)); font-size: calc(0.85em * var(--ui-scale)); white-space: nowrap; pointer-events: auto; cursor: pointer; transform: translate(-50%, -150%); display: none; z-index: 50; border-left-width: calc(3px * var(--ui-scale)); border-left-color: var(--label-color); transition: opacity 0.2s ease-out; opacity: 0; }
+        .object-label.visible { display: block; opacity: 1; }
+        .object-label::before { content: ''; position: absolute; bottom: calc(-12px * var(--ui-scale)); left: 50%; transform: translateX(-50%); width: 1px; height: calc(12px * var(--ui-scale)); background-color: var(--label-color); opacity: 0.7; }
+        #github-container { position: absolute; bottom: calc(10px * var(--ui-scale)); left: 50%; transform: translateX(-50%); z-index: 6; text-align: center; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+        #github-container a { pointer-events: auto; display: block; margin-bottom: calc(5px * var(--ui-scale)); }
+        #github-container svg { width: calc(72px * var(--ui-scale)); height: calc(72px * var(--ui-scale)); fill: var(--text-secondary); transition: fill 0.2s ease; display: block; margin: 0 auto; }
+        #github-container a:hover svg { fill: var(--text-primary); }
+        #github-container p { color: var(--text-primary); opacity: 0.5; font-size: calc(0.8em * var(--ui-scale)); margin: 0; padding: 0; pointer-events: none; }
+        #bh-info-panel {
+            position: absolute;
+            top: calc(15px * var(--ui-scale));
+            left: calc(15px * var(--ui-scale));
+            z-index: 11;
+            background-color: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: calc(8px * var(--ui-scale));
+            padding: calc(22.5px * var(--ui-scale)); /* 1.5x original padding */
+            min-width: calc(420px * var(--ui-scale)); /* 1.5x original min-width */
+            box-shadow: 0 0 calc(15px * var(--ui-scale)) rgba(100, 150, 255, 0.1), 0 calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale)) rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(calc(8px * var(--ui-scale)));
+            -webkit-backdrop-filter: blur(calc(8px * var(--ui-scale)));
+            pointer-events: auto;
+        }
+        #bh-info-panel h2 {
+            font-family: 'Orbitron', sans-serif;
+            color: var(--header-color);
+            margin-top: 0;
+            margin-bottom: calc(15px * var(--ui-scale)); /* Adjusted margin */
+            letter-spacing: calc(1px * var(--ui-scale));
+            font-weight: 400;
+            font-size: calc(2.1em * var(--ui-scale)); /* 1.5x original font size */
+        }
+         #bh-info-panel p {
+            margin: calc(9px * var(--ui-scale)) 0; /* Adjusted margin */
+            font-size: calc(1.425em * var(--ui-scale)); /* 1.5x original font size */
+            line-height: 1.4; /* Adjusted line height */
+            color: var(--text-primary);
+        }
+        #bh-info-panel strong { color: var(--accent-color); }
+        #bh-info-panel button { margin-top: calc(15px * var(--ui-scale)); }
+        .hidden { display: none !important; }
+
+        
+        #controls-bar {
+            position: absolute;
+            top: calc(100vh - 70px * var(--ui-scale)); 
+            left: calc(15px * var(--ui-scale)); 
+            cursor: grab; 
+            display: flex;
+            align-items: center;
+            gap: calc(10px * var(--ui-scale)); 
+            background-color: var(--panel-bg);
+            padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
+            border: 1px solid var(--panel-border);
+            border-radius: calc(8px * var(--ui-scale));
+            box-shadow: 0 calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale)) rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(calc(8px * var(--ui-scale)));
+            -webkit-backdrop-filter: blur(calc(8px * var(--ui-scale)));
+            z-index: 25; /* Increased z-index */
+            pointer-events: auto; /* Ensure it's interactive */
+        }
+        #controls-bar:active {
+            cursor: grabbing; /* Change cursor while dragging */
+        }
+        #controls-bar button {
+            margin: 0;
+            padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale)); 
+            font-size: calc(1.1em * var(--ui-scale)); 
+            line-height: 1; 
+            min-width: calc(40px * var(--ui-scale)); /* Ensure minimum button width */
+            text-align: center; /* Center icon */
+        }
+        .control-separator {
+            color: var(--panel-border);
+            margin: 0 calc(4px * var(--ui-scale));
+        }
+        .time-display {
+            font-size: calc(0.85em * var(--ui-scale));
+            color: var(--text-secondary);
+            margin-left: calc(8px * var(--ui-scale));
+            white-space: nowrap;
+        }
+
+        /* Styles for the new Floating About Panel */
+        #about-panel-floating {
+            position: absolute;
+            top: calc(15px * var(--ui-scale)); /* Align top with other panel container */
+            right: calc(15px * var(--ui-scale)); /* Align right padding */
+            width: calc(800px * var(--ui-scale)); /* Still allow wide */
+            max-width: 45%; /* Constraint to prevent overlap */
+            flex-basis: auto;
+            z-index: 15;
+            pointer-events: auto;
+            padding: calc(15px * var(--ui-scale)); /* More padding */
+            /* Override general panel styles */
+            border-radius: calc(6px * var(--ui-scale));
+            box-shadow: 0 0 calc(12px * var(--ui-scale)) rgba(100, 150, 255, 0.1), 0 calc(3px * var(--ui-scale)) calc(8px * var(--ui-scale)) rgba(0, 0, 0, 0.3);
+        }
+        #about-panel-floating h3 {
+             /* Use a slightly larger font based on base size, not UI scale */
+             font-size: 16px; /* Fixed base size */
+             margin-bottom: calc(12px * var(--ui-scale));
+             color: var(--header-color);
+             /* Start expanded */
+             cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        }
+        #about-panel-floating h3::after { /* Arrow for collapsing */
+            content: '▼'; font-size: calc(0.7em * var(--ui-scale)); transition: transform 0.3s ease;
+        }
+        #about-panel-floating h3.collapsed::after {
+            transform: rotate(-90deg);
+        }
+        #about-panel-floating .expandable-content {
+              max-height: calc(1200px * var(--ui-scale)); /* Even more height */
+              /* Override base font size, ignore UI scale for this panel's content */
+              font-size: 14px; /* Fixed base size */
+              line-height: 1.5; /* Increase line spacing */
+              /* Start expanded */
+              overflow: hidden; transition: max-height 0.4s ease-out;
+        }
+        #about-panel-floating .expandable-content.collapsed {
+              max-height: 0; margin-top: 0; padding-top: 0;
+        }
+        #about-panel-floating .expandable-content p {
+            margin-bottom: calc(15px * var(--ui-scale)); /* More space between points */
+             /* Ensure paragraphs inherit the larger fixed font size */
+             font-size: inherit; 
+        }
+        #about-panel-floating a {
+             color: var(--accent-color);
+             font-size: inherit;
+        }
+
+        /* Styles for panels within the top-left container - LARGER AGAIN */
+        #ui-container .info-panel {
+            flex-basis: calc(600px * var(--ui-scale)); /* Larger base width */
+            padding: calc(12px * var(--ui-scale)); 
+            border-radius: calc(6px * var(--ui-scale));
+            box-shadow: 0 0 calc(10px * var(--ui-scale)) rgba(100, 150, 255, 0.08), 0 calc(2px * var(--ui-scale)) calc(5px * var(--ui-scale)) rgba(0, 0, 0, 0.25); 
+        }
+        #ui-container .info-panel h2 {
+            font-size: 15px; /* Fixed font size */
+            margin-bottom: calc(8px * var(--ui-scale));
+            color: var(--header-color);
+        }
+         #ui-container .info-panel h3 {
+            font-size: 14px; /* Fixed font size */
+            margin-bottom: calc(8px * var(--ui-scale));
+            margin-top: calc(12px * var(--ui-scale));
+            color: var(--accent-color);
+        }
+         #ui-container .info-panel p {
+            font-size: 13px; /* Fixed font size */
+            line-height: 1.4;
+            margin: calc(4px * var(--ui-scale)) 0;
+            color: var(--text-primary);
+        }
+        #ui-container #planet-list-content strong {
+             font-size: 13px; /* Fixed font size */
+             color: inherit;
+        }
+        #ui-container .planet-info {
+             font-size: 12px; /* Fixed font size */
+             color: var(--text-secondary);
+             margin-left: calc(5px * var(--ui-scale));
+        }
+        #ui-container #light-curve-container {
+            height: calc(40px * var(--ui-scale)); /* Taller light curve */
+            margin-top: calc(8px * var(--ui-scale));
+        }
+
+        /* --- Mobile Responsiveness --- */
+        @media (max-width: 768px) {
+             :root {
+                 --ui-scale: 0.48; /* Further reduced scale for tablets */
+             }
+
+             #ui-container {
+                 flex-direction: column; /* Stack panels vertically */
+                 max-width: 95%; /* Allow container to take more width */
+                 top: calc(5px * var(--ui-scale));
+                 left: calc(5px * var(--ui-scale));
+                 gap: calc(8px * var(--ui-scale));
+             }
+
+             #ui-container .info-panel {
+                 flex-basis: auto; /* Let panels take full width */
+                 min-width: 0; /* Remove min-width constraint */
+                 padding: calc(10px * var(--ui-scale));
+             }
+             
+             /* Adjust fixed font sizes slightly */
+             #ui-container .info-panel h2 { font-size: 14px; }
+             #ui-container .info-panel h3 { font-size: 13px; }
+             #ui-container .info-panel p,
+             #ui-container #planet-list-content strong { font-size: 12px; }
+             #ui-container .planet-info { font-size: 11px; }
+
+
+             #about-panel-floating {
+                 width: 95%;
+                 max-width: 95%;
+                 top: auto; /* Remove top constraint */
+                 bottom: calc(75px * var(--ui-scale)); /* Position above controls bar */
+                 left: 50%; /* Center horizontally */
+                 transform: translateX(-50%);
+                 right: auto;
+                 padding: calc(12px * var(--ui-scale));
+             }
+             #about-panel-floating h3 { font-size: 15px; }
+             #about-panel-floating .expandable-content { font-size: 13px; max-height: calc(280px * var(--ui-scale)); overflow-y: auto; } /* Slightly reduced max-height, enable scroll */
+
+             #controls-bar {
+                 width: calc(100% - (20px * var(--ui-scale))); /* Full width minus padding */
+                 left: calc(10px * var(--ui-scale));
+                 bottom: calc(10px * var(--ui-scale)); /* Stick to bottom */
+                 top: auto; /* Remove top constraint */
+                 padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+                 justify-content: space-around; /* Space out buttons */
+                 gap: calc(5px * var(--ui-scale));
+             }
+             #controls-bar button {
+                 padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
+                 font-size: calc(1.0em * var(--ui-scale));
+             }
+             .time-display { font-size: calc(0.8em * var(--ui-scale)); margin-left: calc(4px * var(--ui-scale)); }
+
+             #instructions {
+                 bottom: calc(90px * var(--ui-scale)); /* Position above controls bar */
+                 right: calc(10px * var(--ui-scale));
+                 font-size: calc(0.75em * var(--ui-scale));
+                 padding: calc(6px * var(--ui-scale)) calc(10px * var(--ui-scale));
+             }
+
+             #github-container { display: none; } /* Hide GitHub link on smaller screens */
+             
+             #bh-info-panel {
+                 min-width: 90%;
+                 padding: calc(15px * var(--ui-scale));
+                 left: 5%;
+                 top: calc(10px * var(--ui-scale));
+             }
+             #bh-info-panel h2 { font-size: calc(1.8em * var(--ui-scale)); }
+             #bh-info-panel p { font-size: calc(1.2em * var(--ui-scale)); }
+
+             .object-label {
+                 font-size: calc(0.75em * var(--ui-scale));
+                 padding: calc(3px * var(--ui-scale)) calc(6px * var(--ui-scale));
+             }
+             .object-label::before { display: none; } /* Hide leader line on mobile */
+        }
+        
+        @media (max-width: 480px) {
+            :root {
+                 --ui-scale: 0.45; /* Even smaller scale for phones */
+            }
+            /* Further reduce font sizes if needed */
+            #ui-container .info-panel h2 { font-size: 13px; }
+            #ui-container .info-panel h3 { font-size: 12px; }
+            #ui-container .info-panel p,
+            #ui-container #planet-list-content strong { font-size: 11px; }
+            #ui-container .planet-info { font-size: 10px; }
+
+            #about-panel-floating h3 { font-size: 14px; }
+            #about-panel-floating .expandable-content { font-size: 12px; }
+
+            #controls-bar button {
+                padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale));
+                font-size: calc(0.9em * var(--ui-scale));
+                min-width: calc(35px * var(--ui-scale));
+            }
+            .control-separator { display: none; } /* Hide separators */
+            .time-display { font-size: calc(0.75em * var(--ui-scale)); }
+            
+            #instructions {
+                font-size: calc(0.7em * var(--ui-scale));
+                padding: calc(5px * var(--ui-scale)) calc(8px * var(--ui-scale));
+                 bottom: calc(75px * var(--ui-scale)); /* Adjust position slightly */
+            }
+        }
+
+        /* ==================== */
+        /* MOBILE OPTIMIZATIONS */
+        /* ==================== */
+        @media (max-width: 768px), (pointer: coarse) {
+            :root {
+                --ui-scale: 0.5; /* Smaller UI elements */
+                --parallax-factor: 0.3; /* Reduced motion */
+            }
+            
+            /* Touch-friendly controls */
+            .controls button {
+                min-width: 44px;
+                min-height: 44px;
+            }
+            
+            /* Disable hover effects */
+            .info-panel::before {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading-overlay"> <div class="loader"></div> <div id="loading-text">Initializing Stellar System...</div> </div>
+
+    <div id="ui-container">
+        <div class="info-panel">
+            <h2>CoRoT-2 System</h2>
+            <p>Source: <a href="https://github.com/nthncyz/exoplanet-transit-photometry" target="_blank" title="Visit the GitHub Repository">Exoplanet Transit Photometry</a></p>
+            <p>Star: <strong title="G-type main-sequence star with limb darkening">CoRoT-2a</strong></p>
+            <p>Status: <span id="transit-status">Orbiting</span></p>
+            <p>Transiting: <span id="transiting-planet">None</span></p>
+            <p>Selected: <span id="selected-planet">None</span></p>
+            <h3 title="Simulated brightness variation during transit">Simulated Light Curve</h3>
+            <div id="light-curve-container"><div id="light-curve-bar"></div></div>
+        </div>
+        <div class="info-panel">
+             <h3 class="expandable-header" onclick="toggleSection(this, 'planet-list-content')" title="Click to expand/collapse planet list">Planets in System</h3>
+             <div id="planet-list-content" class="expandable-content"> <!-- Populated by JS --> </div>
+        </div>
+    </div>
+
+    <!-- About Section Moved Out -->
+
+    <!-- Corrected Floating About Panel -->
+    <div id="about-panel-floating" class="info-panel"> 
+        <h3 class="expandable-header" onclick="toggleSection(this, 'about-content-floating')" title="Click to expand/collapse About section">About This Visualization</h3>
+        <div id="about-content-floating" class="expandable-content">
+            <p>• Demonstrates transit photometry for exoplanet detection via periodic stellar flux attenuation during planetary transits.</p>
+            <p>• The "Simulated Light Curve" graph plots relative stellar brightness, showing a dip when a planet passes between the star and the camera.</p>
+            <p>• Transit depth and duration analysis yields planet-star radius ratios and constrains orbital parameters.</p>
+            <p>• Temporal Scaling: CoRoT-2b's orbital period (1.74 d) is scaled for visualization.</p>
+            <p>• Rendered using <strong>HTML</strong>, <strong>CSS</strong>, and <strong>JavaScript</strong> with the <a href="https://threejs.org/" target="_blank">Three.js</a> library. Features procedural <strong>GLSL</strong> shaders (including FBM noise) for the star, sky, and nebulas, and utilizes <strong>Keplerian algorithms</strong> for calculating orbital positions.</p>
+            <p>• Creator: <a href="https://github.com/nthncyz" target="_blank" title="Visit Creator's GitHub">nthncyz</a> | Source: <a href="https://github.com/nthncyz/exoplanet-transit-photometry" target="_blank" title="View source on GitHub">GitHub</a>.</p>
+         </div>
+    </div>
+
+    <!-- Controls Bar -->
+    <div id="controls-bar">
+        <button onclick="changeTimeScale(0.5)" title="Decrease simulation speed (0.5x)">Slower</button>
+        <button onclick="changeTimeScale(1)" title="Reset speed to normal (1x)">Reset Speed</button>
+        <button onclick="changeTimeScale(2)" title="Increase simulation speed (2x)">Faster</button>
+        <span class="control-separator">|</span>
+        <button id="follow-button" onclick="toggleFollowPlanet()" title="Toggle camera follow mode for selected object" disabled>Follow</button>
+        <button onclick="resetView()" title="Reset camera position and zoom">Reset View</button>
+        <span class="control-separator">|</span>
+        <button onclick="viewBlackHole()" title="Jump camera to simulated Black Hole">View Gaia BH1</button>
+        <span class="time-display">Speed: <span id="time-scale-display">1.0</span>x</span>
+    </div>
+
+    <!-- Black Hole Info Panel -->
+    <div id="bh-info-panel" class="info-panel hidden">
+        <h2>Gaia BH1 (Dormant)</h2>
+        <p>This simulation represents Gaia BH1, the closest known black hole to Earth.</p>
+        <p><strong>Type:</strong> Stellar-mass black hole</p>
+        <p><strong>Constellation:</strong> Ophiuchus</p>
+        <p><strong>Distance:</strong> ~1,560 light-years</p>
+        <p><strong>Mass:</strong> ~9.6 Solar Masses</p>
+        <p><em>Note: The visual representation (accretion disk size, particle density) is purely artistic and not to scale.</em></p>
+        <p><em>Its discovery provided strong evidence for dormant stellar-mass black holes.</em></p>  <button onclick="hideBlackHoleInfo()">Back to System</button>
+    </div>
+
+    <!-- Labels -->
+    <div id="label-CoRoT-2a" class="object-label">CoRoT-2a</div>
+    <div id="label-CoRoT-2b" class="object-label">CoRoT-2b</div>
+    <div id="label-Planet C" class="object-label">Planet C</div>
+    <div id="label-Planet D" class="object-label">Planet D</div>
+    <div id="label-comet" class="object-label">Comet</div>
+    <div id="label-comet2" class="object-label">Comet 2</div> 
+    <div id="label-gaia-bh1" class="object-label" onclick="showBlackHoleInfo()">Gaia BH1 (Dormant)</div>
+
+    <!-- Instructions -->
+    <div id="instructions"> Left-click drag to rotate.<br> Scroll wheel to zoom.<br> Right-click drag to pan.<br> Click on a planet/comet to select. </div>
+    
+    <!-- Restored GitHub Container -->
+    <div id="github-container"> 
+        <a id="github-link" href="https://github.com/nthncyz" target="_blank" title="Visit Creator's GitHub"> 
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="GitHub icon"> 
+                <path fill-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/> 
+            </svg> 
+        </a> 
+        <p>nthncyz</p> 
+    </div>
+
+    <!-- Importmap using jsDelivr CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- Constants and Global Variables --- 
+        const MASTER_SCALING_FACTOR = 1.0;
+        const SIMULATION_EPOCH = 0.0;
+        const SIMULATION_DAY_SCALE = 1.0;
+        
+        // --- Moved ALL relevant BASE Constants Up --- 
+        const BASE_DISTANT_FAR_DIST = 35000;
+        const BASE_STARFIELD_FAR_DIST = 6000; 
+        const BASE_DISTANT_NEAR_DIST = 6000;
+        const BASE_STARFIELD_NEAR_DIST = 1500;
+        const BASE_STAR_RADIUS = 18;
+        const BASE_COMET_HEAD_RADIUS = 3.0 * 1.5;
+        const BASE_COMET_ORBIT_X = 370; 
+        const BASE_COMET_ORBIT_Z = 240; 
+        const BASE_COMET_PARTICLE_VEL = 65;
+        const BASE_COMET_TAIL_SIZE = 2.0;
+        const BASE_COMET_LIGHT_DIST = 80;
+        const BASE_BH_POS = new THREE.Vector3(5000, 1000, -30000);
+        const BASE_BH_DISK_RADIUS = 150;
+        const BASE_BH_DISK_THICKNESS = 10;
+        const BASE_BH_PARTICLE_SIZE_MIN = 2.0;
+        const BASE_BH_PARTICLE_SIZE_MAX = 4.5;
+        const BASE_STARFIELD_SIZE_ATTENUATION = 300;
+        const BASE_DISTANT_SIZE_ATTENUATION = 200;
+        const BASE_CAMERA_NEAR = 0.5;
+        const BASE_CAMERA_FAR = 60000;
+        const BASE_CAMERA_MIN_DIST = 25;
+        const BASE_STAR_LIGHT_DIST = 11000;
+        const BASE_SHOOTING_STAR_SPEED = 250;
+        const SHOOTING_STAR_SPEED = BASE_SHOOTING_STAR_SPEED * MASTER_SCALING_FACTOR;
+        const BASE_SHOOTING_STAR_SIZE = 14.0; // Re-add this constant
+        const NEBULA_BASE_SIZE = 8000;
+        const NEBULA_COUNT = 6;
+        // Calculated constants that depend only on the above
+        const CONSTELLATION_SPHERE_RADIUS = BASE_DISTANT_FAR_DIST * 2.0 * MASTER_SCALING_FACTOR;
+
+        // Approx data for Aquila (RA hours, Dec degrees, Vmag)
+        const CONSTELLATION_AQUILA_DATA = [
+          { name: "Altair", ra: 19.846, dec: 8.868, vmag: 0.77 },
+          { name: "Tarazed", ra: 19.773, dec: 10.61, vmag: 2.72 },
+          { name: "Alshain", ra: 19.921, dec: 6.40, vmag: 3.71 },
+          { name: "Okab ζ", ra: 19.092, dec: 13.86, vmag: 2.99 },
+          { name: "Okab ε", ra: 18.995, dec: 15.07, vmag: 4.02 },
+          { name: "θ Aql", ra: 20.189, dec: -0.82, vmag: 3.24 },
+          { name: "η Aql", ra: 19.870, dec: 1.00, vmag: 3.9 }, // Cepheid variable avg
+          { name: "δ Aql", ra: 19.421, dec: 3.11, vmag: 3.36 },
+          { name: "λ Aql", ra: 19.110, dec: -4.86, vmag: 3.43 },
+          { name: "ι Aql", ra: 19.611, dec: -1.28, vmag: 4.36 },
+          { name: "μ Aql", ra: 19.758, dec: 7.88, vmag: 4.45 }, // Fainter, helps shape
+          // Add more if desired for better shape
+        ];
+
+        let scene, camera, renderer, controls, raycaster, composer, starPointLight, blackHole;
+        let star, starGlow, proceduralSky;
+        let particles, particleMaterial, particleGeometry; let distantStars, distantStarMaterial;
+        let comet, comet2;
+        let clock; // Re-add clock declaration
+        let planets = []; // Re-add planets array declaration
+        let nebulas = []; // Add nebulas array declaration
+        let constellationPoints; // Add constellation points declaration
+        let timeScale = 1.0; // Re-add timeScale declaration
+        let selectedObject = null; let isFollowingObject = false; let isAutoFollowing = false;
+        let particleBasePositions, distantParticleBasePositions;
+        const mouse = new THREE.Vector2();
+        const tempVector = new THREE.Vector3();
+        const tempVector2 = new THREE.Vector3();
+        const tempVectorNDC = new THREE.Vector3();
+        const startCameraPosition = new THREE.Vector3(0, 500 * MASTER_SCALING_FACTOR, 3000 * MASTER_SCALING_FACTOR);
+        const defaultCameraPosition = new THREE.Vector3(0, 100 * MASTER_SCALING_FACTOR, 400 * MASTER_SCALING_FACTOR);
+        let shootingStars = [];
+        const MAX_SHOOTING_STARS = 150; // Optimization: Reduced from 250
+        const SHOOTING_STAR_LIFETIME = 4.0;
+        const labels = {};
+        let labelsInitiallyVisible = true; let initialLabelTimeoutId = null; let labelReappearTimeoutId = null; let labelCooldownTimeoutId = null; let labelCooldownActive = false; let hoveredObjectName = null;
+        const INITIAL_LABEL_DURATION = 35000; const LABEL_REAPPEAR_DURATION = 5000; const LABEL_COOLDOWN_DURATION = 15000;
+        let autoUnfollowTimeoutId = null; const AUTO_UNFOLLOW_DURATION = 15000;
+        let inactivityTimerId = null; const INACTIVITY_TIMEOUT_DURATION = 10000;
+
+        let isInitialZooming = true;
+        let initialZoomDuration = 10.0;
+        let initialZoomStartTime = 0;
+        let introZoomStartPos = new THREE.Vector3();
+        let introZoomEndPos = new THREE.Vector3();
+        let introZoomStartTarget = new THREE.Vector3();
+        let introZoomEndTarget = new THREE.Vector3();
+        const baseStarLightIntensity = 4.5;
+
+        let isInBHView = false;
+        let isShowingBHInfo = false;
+
+        const BASE_PLANET_DATA = [
+             { name: "CoRoT-2b", radius: 3.0, color: 0xffaa55, roughness: 0.7, metalness: 0.2, emissive: 0x111108, emissiveIntensity: 1.5, info: "Hot Jupiter", transitPulse: 1.08,
+               a: 25.0, e: 0.01, i: 0.05, omega_lc: 0.1, omega_sc: 1.5, M0: 0.0, period: 3.48 * SIMULATION_DAY_SCALE },
+             { name: "Planet C", radius: 2.25, color: 0x66aabb, roughness: 0.8, metalness: 0.3, emissive: 0x080811, emissiveIntensity: 1.2, info: "Hypothetical Ice Giant", transitPulse: 1.05,
+               a: 70.0, e: 0.05, i: 0.15, omega_lc: 0.5, omega_sc: 0.2, M0: Math.PI*0.7, period: 15.0 * SIMULATION_DAY_SCALE },
+             { name: "Planet D", radius: 3.0, color: 0x99aa88, roughness: 0.6, metalness: 0.5, emissive: 0x10110f, emissiveIntensity: 1.3, info: "Hypothetical Terrestrial", transitPulse: 1.06,
+               a: 110.0, e: 0.08, i: 0.1, omega_lc: 1.2, omega_sc: 2.8, M0: Math.PI*1.4, period: 40.0 * SIMULATION_DAY_SCALE }
+        ];
+
+        const planetData = BASE_PLANET_DATA.map(data => {
+             const scaledData = { ...data, radius: data.radius * MASTER_SCALING_FACTOR, a: data.a * MASTER_SCALING_FACTOR, n: (2 * Math.PI) / data.period };
+             return scaledData;
+        });
+        const starRadius = BASE_STAR_RADIUS * MASTER_SCALING_FACTOR;
+        const particleCount = 20000; const distantParticleCount = 25000; // Optimization: Reduced counts
+        const orbitLineSegments = 128; const atmosphereScale = 1.08; const parallaxFactor = 0.05; const distantParallaxFactor = 0.02;
+        const ui = { status: document.getElementById('transit-status'), transitingPlanet: document.getElementById('transiting-planet'), selectedPlanet: document.getElementById('selected-planet'), lightBar: document.getElementById('light-curve-bar'), timeScaleDisplay: document.getElementById('time-scale-display'), followButton: document.getElementById('follow-button'), planetListContent: document.getElementById('planet-list-content'), loadingOverlay: document.getElementById('loading-overlay'), loadingText: document.getElementById('loading-text'), uiContainer: document.getElementById('ui-container'), bhInfoPanel: document.getElementById('bh-info-panel') };
+        const limbDark_u1 = 0.4; const limbDark_u2 = 0.26;
+
+        const gaiaBH1Data = { name: "Gaia BH1", position: BASE_BH_POS.clone().multiplyScalar(MASTER_SCALING_FACTOR), particleCount: 100000, diskRadius: BASE_BH_DISK_RADIUS * MASTER_SCALING_FACTOR, diskThickness: BASE_BH_DISK_THICKNESS * MASTER_SCALING_FACTOR }; // Optimization: Reduced particle count
+
+        let isAnimating = false; let initComplete = false;
+
+        const shaderNoiseFunctions = ` const float PI = 3.14159265359; float random(vec2 st) { return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123); } float noise(vec2 st) { vec2 i = floor(st); vec2 f = fract(st); float a = random(i); float b = random(i + vec2(1.0, 0.0)); float c = random(i + vec2(0.0, 1.0)); float d = random(i + vec2(1.0, 1.0)); vec2 u = f * f * (3.0 - 2.0 * f); return mix(a, b, u.x) + (c - a) * u.y * (1.0 - u.x) + (d - b) * u.x * u.y; } float FBM(vec2 st, int octaves, float persistence, float lacunarity) { float value = 0.0; float amplitude = 0.5; float frequency = 1.0; for (int i = 0; i < octaves; i++) { value += amplitude * noise(st * frequency); frequency *= lacunarity; amplitude *= persistence; } float normFactor = 0.0; amplitude = 0.5; for (int i=0; i<octaves; i++) { normFactor += amplitude; amplitude *= persistence; } return value / max(normFactor, 0.001); } float FBM(vec3 p, int octaves, float persistence, float lacunarity) { float value = 0.0; float amplitude = 0.5; float frequency = 1.0; for (int i=0; i<octaves; i++) { value += amplitude * noise(p.xy * frequency + float(i)*0.3); value += amplitude * noise(p.yz * frequency + float(i)*0.5); value += amplitude * noise(p.xz * frequency + float(i)*0.7); frequency *= lacunarity; amplitude *= persistence; } float normFactor = 0.0; amplitude = 0.5; for (int i=0; i<octaves; i++) { normFactor += amplitude * 3.0; amplitude *= persistence; } return value / max(normFactor, 0.01); } float safeFBM(vec2 st, int oct, float p, float l) { float result = FBM(st, oct, p, l); return isnan(result) || isinf(result) ? 0.5 : result; } float safeFBM(vec3 p, int oct, float ps, float l) { float result = FBM(p, oct, ps, l); return isnan(result) || isinf(result) ? 0.5 : result; } `;
+
+        // --- Classes ---
+        class Comet {
+             constructor(scene) {
+                 this.scene = scene;
+                 this.maxParticles = 37500;
+                 this.particlesPerSecond = 1500;
+                 this.particleLifetime = 8.0;
+                 this.particleVelocity = BASE_COMET_PARTICLE_VEL * MASTER_SCALING_FACTOR;
+                 this.particleSpread = 0.4;
+                 this.headColor = new THREE.Color(0xddeeff);
+                 this.tailColorStart = new THREE.Color(0xccbbff);
+                 this.tailColorEnd = new THREE.Color(0x050510);
+                 this.headRadius = BASE_COMET_HEAD_RADIUS * MASTER_SCALING_FACTOR;
+                 this.speed = 0.15;
+                 this.orbitRadiusX = BASE_COMET_ORBIT_X * MASTER_SCALING_FACTOR;
+                 this.orbitRadiusZ = BASE_COMET_ORBIT_Z * MASTER_SCALING_FACTOR;
+                 this.orbitTilt = 0.2;
+                 this.currentAngle = Math.random() * Math.PI * 2;
+                 this.name = "comet";
+
+                 // Path Prediction Visualization
+                 this.predictionPoints = 30;
+                 this.predictionGeometry = new THREE.BufferGeometry();
+                 this.predictionPositions = new Float32Array(this.predictionPoints * 3);
+                 this.predictionGeometry.setAttribute('position', new THREE.BufferAttribute(this.predictionPositions, 3));
+                 const predictionMaterial = new THREE.LineDashedMaterial({
+                     color: this.headColor,
+                     linewidth: 1,
+                     scale: 1,
+                     dashSize: 5 * MASTER_SCALING_FACTOR,
+                     gapSize: 3 * MASTER_SCALING_FACTOR,
+                     transparent: true,
+                     opacity: 0.6
+                 });
+                 this.predictionLine = new THREE.Line(this.predictionGeometry, predictionMaterial);
+                 this.scene.add(this.predictionLine);
+
+                 const headGeo = new THREE.SphereGeometry(this.headRadius, 16, 16);
+                 const headMat = new THREE.MeshBasicMaterial({ color: this.headColor, transparent: true, opacity: 0.98, blending: THREE.AdditiveBlending, depthWrite: false });
+                 this.headMesh = new THREE.Mesh(headGeo, headMat);
+                 this.headMesh.name = this.name;
+                 this.headMesh.add(new THREE.PointLight(this.headColor, 1.8, BASE_COMET_LIGHT_DIST * MASTER_SCALING_FACTOR * 1.2, 2));
+                 this.scene.add(this.headMesh);
+                 this.headMesh.visible = true;
+                 this.initTail();
+                 this.scene.add(this.tailPoints);
+                 this.tailPoints.visible = true;
+                 this.particleCursor = 0;
+                 this.timeSinceEmit = 0;
+                 console.log(`Comet created. Head Radius: ${this.headRadius.toFixed(2)}, Orbit X/Z: ${this.orbitRadiusX.toFixed(0)}/${this.orbitRadiusZ.toFixed(0)}, Particles: ${this.maxParticles}`);
+            }
+             initTail() { this.tailGeometry = new THREE.BufferGeometry(); this.particlePositions = new Float32Array(this.maxParticles * 3); this.particleColors = new Float32Array(this.maxParticles * 3); this.particleVelocities = new Array(this.maxParticles).fill(null).map(() => new THREE.Vector3()); this.particleLifetimes = new Float32Array(this.maxParticles).fill(0); this.tailGeometry.setAttribute('position', new THREE.BufferAttribute(this.particlePositions, 3)); this.tailGeometry.setAttribute('color', new THREE.BufferAttribute(this.particleColors, 3)); for (let i = 0; i < this.maxParticles; i++) { this.particlePositions[i * 3 + 0] = 10000; this.particlePositions[i * 3 + 1] = 10000; this.particlePositions[i * 3 + 2] = 10000; } const tailMat = new THREE.PointsMaterial({ size: BASE_COMET_TAIL_SIZE * MASTER_SCALING_FACTOR, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, sizeAttenuation: true }); this.tailPoints = new THREE.Points(this.tailGeometry, tailMat); this.tailPoints.frustumCulled = false; }
+             update(delta, starPos) {
+                 this.currentAngle += this.speed * delta * timeScale;
+                 const x = Math.cos(this.currentAngle) * this.orbitRadiusX;
+                 const z = Math.sin(this.currentAngle) * this.orbitRadiusZ;
+                 const y = Math.sin(this.currentAngle) * this.orbitRadiusX * Math.sin(this.orbitTilt);
+                 this.headMesh.position.set(x, y, z);
+                 this.updateTail(delta, starPos);
+                 // Update prediction path after main update
+                 this.updatePredictionPath(5.0, this.predictionPoints); // Predict 5 seconds ahead
+             }
+             updateTail(delta, starPos) { const scaledDelta = delta * timeScale; let needsPosUpdate = false; let needsColUpdate = false; for (let i = 0; i < this.maxParticles; i++) { if (this.particleLifetimes[i] > 0) { this.particleLifetimes[i] -= scaledDelta; if (this.particleLifetimes[i] <= 0) { this.particlePositions[i * 3 + 1] = 10000; needsPosUpdate = true; } else { const idx3 = i * 3; this.particlePositions[idx3 + 0] += this.particleVelocities[i].x * scaledDelta; this.particlePositions[idx3 + 1] += this.particleVelocities[i].y * scaledDelta; this.particlePositions[idx3 + 2] += this.particleVelocities[i].z * scaledDelta; needsPosUpdate = true; const lifeRatio = Math.max(0, this.particleLifetimes[i] / this.particleLifetime); const currentColor = this.tailColorStart.clone().lerp(this.tailColorEnd, 1 - lifeRatio); this.particleColors[idx3 + 0] = currentColor.r; this.particleColors[idx3 + 1] = currentColor.g; this.particleColors[idx3 + 2] = currentColor.b; needsColUpdate = true; } } } this.timeSinceEmit += scaledDelta; const particlesToEmit = Math.floor(this.timeSinceEmit * this.particlesPerSecond); if (particlesToEmit > 0) { this.timeSinceEmit -= particlesToEmit / this.particlesPerSecond; for (let j = 0; j < particlesToEmit; j++) { if (this.emitParticle(starPos)) { needsPosUpdate = true; needsColUpdate = true; } } } if (needsPosUpdate) this.tailGeometry.attributes.position.needsUpdate = true; if (needsColUpdate) this.tailGeometry.attributes.color.needsUpdate = true; }
+             emitParticle(starPos) { const i = this.particleCursor; this.particleCursor = (this.particleCursor + 1) % this.maxParticles; this.particleLifetimes[i] = this.particleLifetime * (0.8 + Math.random() * 0.4); const idx3 = i * 3; this.particlePositions[idx3 + 0] = this.headMesh.position.x; this.particlePositions[idx3 + 1] = this.headMesh.position.y; this.particlePositions[idx3 + 2] = this.headMesh.position.z; this.particleColors[idx3 + 0] = this.tailColorStart.r; this.particleColors[idx3 + 1] = this.tailColorStart.g; this.particleColors[idx3 + 2] = this.tailColorStart.b; const vel = this.headMesh.position.clone().sub(starPos).normalize(); vel.x += THREE.MathUtils.randFloatSpread(this.particleSpread); vel.y += THREE.MathUtils.randFloatSpread(this.particleSpread); vel.z += THREE.MathUtils.randFloatSpread(this.particleSpread); vel.normalize().multiplyScalar(this.particleVelocity * (0.8 + Math.random() * 0.4)); this.particleVelocities[i].copy(vel); return true; }
+
+             // Method to calculate and update the predicted path line
+             updatePredictionPath(predictionDuration, steps) {
+                 if (!this.predictionLine) return; // Safety check
+
+                 const angleStep = (this.speed * predictionDuration * timeScale) / steps;
+                 const positions = this.predictionGeometry.attributes.position.array;
+
+                 for (let i = 0; i < steps; i++) {
+                     const futureAngle = this.currentAngle + (i + 1) * angleStep;
+
+                     // Calculate future position using the same logic as update()
+                     const x = Math.cos(futureAngle) * this.orbitRadiusX;
+                     const z = Math.sin(futureAngle) * this.orbitRadiusZ;
+                     const y = Math.sin(futureAngle) * this.orbitRadiusX * Math.sin(this.orbitTilt);
+
+                     const idx = i * 3;
+                     positions[idx] = x;
+                     positions[idx + 1] = y;
+                     positions[idx + 2] = z;
+                 }
+
+                 // Update the geometry attributes
+                 this.predictionGeometry.attributes.position.needsUpdate = true;
+                 // Required for dashed lines
+                 this.predictionLine.computeLineDistances();
+             }
+        }
+
+        // --- Orbit Calculation Functions ---
+        function solveKepler(M, e, maxIter = 8, tolerance = 1e-7) {
+            M = M % (2 * Math.PI);
+            let E = M; // Initial guess for Eccentric Anomaly
+            // More robust initial guess for high eccentricity orbits
+            if (e > 0.8 && M < Math.PI) {
+                E = M + e * 0.85;
+            } else if (e > 0.8) {
+                E = M - e * 0.85;
+            }
+
+            let deltaE = Infinity;
+            for (let i = 0; i < maxIter; i++) {
+                const sinE = Math.sin(E);
+                const cosE = Math.cos(E);
+                const f = E - e * sinE - M; // Kepler's equation f(E) = E - e*sin(E) - M
+                const df = 1 - e * cosE; // Derivative f'(E)
+
+                // Check for near-zero derivative (can happen at periapsis/apoapsis)
+                if (Math.abs(df) < 1e-10) {
+                   console.warn("Near-zero derivative in solveKepler at E=", E, " M=", M, " e=", e);
+                   // Apply a small step instead of division by zero
+                   deltaE = -f * (f > 0 ? 0.01 : -0.01);
+                } else {
+                   deltaE = -f / df; // Newton-Raphson step
+                }
+
+                E += deltaE;
+                // Ensure E stays within a reasonable range if needed, although typically not necessary with good initial guess
+                // E = E % (2 * Math.PI);
+
+                if (Math.abs(deltaE) < tolerance) break; // Converged
+            }
+            return E;
+        }
+        function calculateKeplerianPosition(elements, time) { const M = (elements.M0 + elements.n * (time - SIMULATION_EPOCH)) % (2 * Math.PI); const E = solveKepler(M, elements.e); const cosE = Math.cos(E); const sinE = Math.sin(E); const x_orb = elements.a * (cosE - elements.e); const y_orb = elements.a * Math.sqrt(1 - elements.e * elements.e) * sinE; const cos_omega_sc = Math.cos(elements.omega_sc); const sin_omega_sc = Math.sin(elements.omega_sc); const cos_omega_lc = Math.cos(elements.omega_lc); const sin_omega_lc = Math.sin(elements.omega_lc); const cos_i = Math.cos(elements.i); const sin_i = Math.sin(elements.i); const x = (cos_omega_sc * cos_omega_lc - sin_omega_sc * sin_omega_lc * cos_i) * x_orb + (-sin_omega_sc * cos_omega_lc - cos_omega_sc * sin_omega_lc * cos_i) * y_orb; const y = (cos_omega_sc * sin_omega_lc + sin_omega_sc * cos_omega_lc * cos_i) * x_orb + (-sin_omega_sc * sin_omega_lc + cos_omega_sc * cos_omega_lc * cos_i) * y_orb; const z = (sin_omega_sc * sin_i) * x_orb + (cos_omega_sc * sin_i) * y_orb; return new THREE.Vector3(x, z, -y); }
+
+        // << NEW FUNCTION ADDED >> Function to calculate position visually on the ring (ignores eccentricity)
+        function calculateVisualRingPosition(elements, time) {
+            // Calculate the Mean Anomaly (angle based on average speed)
+            const M = (elements.M0 + elements.n * (time - SIMULATION_EPOCH)) % (2 * Math.PI);
+
+            // Calculate position on a simple circle flat on the XZ plane
+            // (Matches the RingGeometry after its internal rotation.x = PI/2 in createPlanets)
+            const x_vis = elements.a * Math.cos(M);
+            const y_vis = 0;
+            const z_vis = elements.a * Math.sin(M); // Positive Z
+
+            const visualPosition = new THREE.Vector3(x_vis, y_vis, z_vis);
+
+            // Apply the SAME matrix rotations as the orbitRing mesh gets in createPlanets()
+            // The ring is rotated PI/2 on X first (implicit in RingGeometry),
+            // then rotated around Z by inclination (i), then around Y by ascending node (omega_lc)
+
+            const matrixZ = new THREE.Matrix4().makeRotationZ(elements.i);
+            const matrixY = new THREE.Matrix4().makeRotationY(elements.omega_lc);
+
+            // Apply rotations in the same order as the matrices were likely applied internally or conceptually to the ring
+            visualPosition.applyMatrix4(matrixZ); // Apply inclination rotation first
+            visualPosition.applyMatrix4(matrixY); // Then apply ascending node rotation
+
+            return visualPosition;
+        }
+
+        function easeInOutCubic(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+        // --- Creation Functions (Define BEFORE init) ---
+
+        // Add missing helper functions for constellations
+        function raToRad(hours) {
+            // Convert RA hours to radians
+            return (hours * 15 * Math.PI) / 180;
+        }
+
+        function decToRad(degrees) {
+            // Convert DEC degrees to radians
+            return (degrees * Math.PI) / 180;
+        }
+
+        function sphericalToCartesian(raRad, decRad, radius) {
+            // Convert spherical coordinates (RA, Dec, radius) to Cartesian (x, y, z)
+            // Note: Standard astronomical RA increases eastward, Three.js Y angle increases counter-clockwise from +Z.
+            // We need to map RA/Dec to Three.js spherical coordinates (radius, phi, theta)
+            // phi is the polar angle (from +Y axis), theta is the azimuthal angle (from +Z axis)
+            const phi = Math.PI / 2 - decRad; // DEC maps to elevation, so phi = 90 - dec
+            const theta = raRad; // RA maps directly to azimuth
+
+            const x = radius * Math.sin(phi) * Math.sin(theta);
+            const y = radius * Math.cos(phi);
+            const z = radius * Math.sin(phi) * Math.cos(theta);
+            return new THREE.Vector3(x, y, z);
+        }
+
+        function createConstellations() {
+            console.log("Creating Constellation: Aquila...");
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            const sizes = [];
+            const baseColor = new THREE.Color(0xffffff); // White stars
+
+            // Magnitude determines size (brighter = larger)
+            const maxMag = 6.0; // Dimest star we'd plot (approx)
+            const minMag = -1.5; // Brightest possible star (Sirius)
+            const minSize = 2.0 * MASTER_SCALING_FACTOR;
+            const maxSize = 12.0 * MASTER_SCALING_FACTOR; // Adjust max size as needed
+
+            CONSTELLATION_AQUILA_DATA.forEach(starData => {
+                const raRad = raToRad(starData.ra);
+                const decRad = decToRad(starData.dec);
+                const pos = sphericalToCartesian(raRad, decRad, CONSTELLATION_SPHERE_RADIUS);
+                
+                positions.push(pos.x, pos.y, pos.z);
+                colors.push(baseColor.r, baseColor.g, baseColor.b);
+                
+                // Simple linear mapping: brighter (lower mag) = larger size
+                const size = THREE.MathUtils.mapLinear(starData.vmag, maxMag, minMag, minSize, maxSize);
+                sizes.push(Math.max(minSize, size)); // Ensure minimum size
+            });
+
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+
+            // Simple shader material for constellation points
+            const vertexShader = `
+                attribute float size;
+                varying vec3 vColor;
+                void main() {
+                    vColor = color;
+                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                    gl_PointSize = size * (150.0 / -mvPosition.z); // Adjust attenuation factor (150.0) as needed
+                    gl_Position = projectionMatrix * mvPosition;
+                }
+            `;
+            const fragmentShader = `
+                varying vec3 vColor;
+                void main() {
+                    if (length(gl_PointCoord - vec2(0.5, 0.5)) > 0.48) discard; // Circular points
+                    gl_FragColor = vec4(vColor, 0.9);
+                }
+            `;
+
+            const material = new THREE.ShaderMaterial({
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                transparent: true,
+                vertexColors: true
+            });
+
+            constellationPoints = new THREE.Points(geometry, material);
+            constellationPoints.frustumCulled = false; // Ensure they are always rendered
+            scene.add(constellationPoints);
+            console.log(`Added ${CONSTELLATION_AQUILA_DATA.length} stars for Aquila.`);
+        }
+
+        // --- Initialization Function ---
+        function init() {
+            try {
+                console.log(`Initializing simulation (Visual Ring Pos, jsDelivr, UI Scale 0.6)...`); // Log changes
+                scene = new THREE.Scene();
+                clock = new THREE.Clock();
+                camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, BASE_CAMERA_NEAR * MASTER_SCALING_FACTOR, BASE_CAMERA_FAR * MASTER_SCALING_FACTOR);
+                camera.position.copy(startCameraPosition);
+                renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+                renderer.setClearColor(0x000000, 1);
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.physicallyCorrectLights = true;
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.toneMappingExposure = 1.0;
+                document.body.appendChild(renderer.domElement);
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.screenSpacePanning = false;
+                controls.minDistance = BASE_CAMERA_MIN_DIST * MASTER_SCALING_FACTOR;
+                controls.maxDistance = camera.far * 0.95;
+                controls.target.set(0, 0, 0);
+                controls.enabled = false;
+                raycaster = new THREE.Raycaster();
+                const ambientLight = new THREE.AmbientLight(0x304060, 0.7);
+                scene.add(ambientLight);
+
+                console.log("Creating Star..."); createStar();
+                console.log("Creating Planets..."); createPlanets(); // Uses calculateKeplerianPosition for initial placement, which is fine.
+                console.log("Creating Starfield..."); createStarfield();
+                console.log("Creating Distant Stars..."); createDistantStars();
+                console.log("Creating Procedural Sky..."); createProceduralSky();
+                console.log("Creating Nebulas..."); createNebulas();
+                console.log("Creating Comet..."); createComet();
+                console.log("Creating Comet 2..."); createComet2(); // <<< ADDED
+                console.log("Creating Black Hole..."); createBlackHole();
+                console.log("Creating Constellations..."); createConstellations(); // <<< ADDED
+                console.log("Setting up Post Processing..."); setupPostProcessing();
+                console.log("Initializing Shooting Stars..."); initShootingStars();
+                console.log("Initializing Labels..."); initLabels();
+
+                // Initial Zoom logic (remains largely the same)
+                const corotB = planets.find(p => p.data.name === "CoRoT-2b");
+                if (corotB && corotB.mesh) {
+                     selectObject(corotB); isFollowingObject = true; isAutoFollowing = true;
+                     const targetMesh = corotB.mesh;
+                     targetMesh.updateMatrixWorld(true); // Ensure world matrix is calculated
+                     introZoomEndTarget.copy(targetMesh.getWorldPosition(tempVector)); // Use the correct starting position
+                     if (introZoomEndTarget.lengthSq() > 0.01) { // Check if position is valid
+                         introZoomStartPos.copy(startCameraPosition);
+                         introZoomStartTarget.set(0, 0, 0);
+                         // Use defaultCameraPosition for the final zoomed-in position
+                         introZoomEndPos.copy(defaultCameraPosition);
+                         camera.position.copy(introZoomStartPos);
+                         controls.target.copy(introZoomStartTarget);
+                         controls.update();
+                         ui.followButton.classList.add("active");
+                         console.log("Successfully set CoRoT-2b as initial target for zoom.");
+                         initialZoomStartTime = clock.getElapsedTime();
+                         controls.autoRotate = false;
+                     } else {
+                         console.warn("CoRoT-2b world position was (0,0,0) during init. Using Keplerian position for zoom target.");
+                         // Fallback: Calculate initial position again for the target
+                         introZoomEndTarget.copy(calculateKeplerianPosition(corotB.data, SIMULATION_EPOCH));
+                         if (introZoomEndTarget.lengthSq() > 0.01) {
+                             introZoomStartPos.copy(startCameraPosition);
+                             introZoomStartTarget.set(0, 0, 0);
+                             introZoomEndPos.copy(defaultCameraPosition);
+                             camera.position.copy(introZoomStartPos);
+                             controls.target.copy(introZoomStartTarget);
+                             controls.update();
+                             ui.followButton.classList.add("active");
+                             console.log("Successfully set CoRoT-2b as initial target (Keplerian fallback).");
+                             initialZoomStartTime = clock.getElapsedTime();
+                             controls.autoRotate = false;
+                         } else {
+                             console.error("Failed to get valid position for CoRoT-2b for intro zoom. Skipping.");
+                             selectObject(null);
+                             isFollowingObject = false;
+                             if (ui.followButton) { ui.followButton.classList.remove("active"); ui.followButton.disabled = true; }
+                             isInitialZooming = false; controls.enabled = true;
+                         }
+                     }
+                } else {
+                     console.warn("Could not find CoRoT-2b mesh for intro zoom.");
+                     selectObject(null);
+                     isFollowingObject = false;
+                     if (ui.followButton) { ui.followButton.classList.remove("active"); ui.followButton.disabled = true; }
+                     isInitialZooming = false; controls.enabled = true;
+                }
+
+
+                addEventListeners();
+                initComplete = true;
+                console.log("Initialization finished setup. Checking loading complete...");
+                checkLoadingComplete();
+                initialLabelTimeoutId = setTimeout(() => { console.log("Initial label display duration ended."); labelsInitiallyVisible = false; startLabelCooldown(); }, INITIAL_LABEL_DURATION);
+
+            } catch (error) { console.error("Initialization failed:", error); if (ui.loadingText) { ui.loadingText.textContent = "Error during initialization. Check console."; ui.loadingText.style.color = 'red'; } const loader = document.querySelector('.loader'); if(loader) loader.style.display = 'none'; if (ui.loadingOverlay) { ui.loadingOverlay.classList.remove('hidden'); ui.loadingOverlay.style.opacity = '1'; } }
+        }
+
+        // --- Creation Functions (createStar, createPlanets, etc.) ---
+        // These functions remain largely the same as in the original code you provided.
+        // createPlanets uses calculateKeplerianPosition for INITIAL placement, which is okay.
+        // The animate loop will use calculateVisualRingPosition for ongoing updates.
+
+        function createStar() { const starGeometry = new THREE.SphereGeometry(starRadius, 64, 64); const starMaterial = new THREE.ShaderMaterial({ uniforms: { time: { value: 1.0 }, color1: { value: new THREE.Color(0xfff8e8) }, color2: { value: new THREE.Color(0xffd890) }, u1: { value: limbDark_u1 }, u2: { value: limbDark_u2 } }, vertexShader: `varying vec2 vUv; varying vec3 vNormal; varying vec3 vViewPosition; void main() { vUv = uv; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); vViewPosition = -mvPosition.xyz; vNormal = normalize(normalMatrix * normal); gl_Position = projectionMatrix * mvPosition; }`, fragmentShader: ` 
+    uniform float time;
+    uniform vec3 color1;
+    uniform vec3 color2;
+    uniform float u1;
+    uniform float u2;
+    varying vec2 vUv;
+    varying vec3 vNormal;
+    varying vec3 vViewPosition;
+    
+    ${shaderNoiseFunctions}
+    
+    float limbDarkening(float mu){ 
+        mu=max(0.0,mu); 
+        return 1.0-u1*(1.0-mu)-u2*(1.0-mu)*(1.0-mu); 
+    }
+    
+    void main(){ 
+        vec3 normal=normalize(vNormal);
+        vec3 viewDir=normalize(vViewPosition);
+        float mu=dot(normal,viewDir);
+        float d=length(vUv-0.5);
+        
+        // Enhanced noise parameters
+        float noiseFast=safeFBM(vUv*15.0+time*1.2, 4, 0.5, 2.0);
+        float noiseMid=safeFBM(vUv*8.0-time*0.3, 5, 0.45, 2.1);
+        float noiseSlow=safeFBM(vUv*3.0+time*0.05, 6, 0.4, 2.0);
+        float noiseFlicker=noise(vUv*30.0 + time * 3.5);
+        
+        // More dynamic noise mixing
+        float combinedNoise = noiseFast*0.5 + noiseMid*0.3 + noiseSlow*0.2 + noiseFlicker * 0.15;
+        combinedNoise = smoothstep(0.3, 0.7, combinedNoise);
+        
+        // Brighter base color
+        vec3 baseColor=mix(color1*1.1,color2*1.1,pow(combinedNoise,1.8));
+        float pulse = 0.9 + 0.1 * sin(time*4.0+d*12.0+noiseSlow*3.0);
+        
+        // Stronger pulse
+        baseColor*=pulse;
+        float edgeFactor=smoothstep(0.4, 0.5, d);
+        
+        // Enhanced edge glow
+        vec3 edgeGlowColor=mix(baseColor, color2*1.8, edgeFactor);
+        float darkenFactor=limbDarkening(mu);
+        darkenFactor=max(0.0,darkenFactor);
+        vec3 finalColor = edgeGlowColor * darkenFactor;
+        
+        // More prominent surface features
+        finalColor += pow(max(0.0, noiseFast - 0.6), 2.0) * color1 * 2.5;
+        finalColor += pow(max(0.0, noiseMid - 0.5), 2.5) * color2 * 1.8;
+        finalColor += pow(max(0.0, noiseFlicker - 0.7), 3.0) * color1 * 1.2;
+        finalColor = clamp(finalColor, 0.0, 5.0);
+        
+        // Allow higher brightness
+        gl_FragColor = vec4(finalColor, 1.0);
+    }` }); star = new THREE.Mesh(starGeometry, starMaterial); star.name = "CoRoT-2a"; scene.add(star); starPointLight = scene.getObjectByProperty('isPointLight'); if (!starPointLight) { starPointLight = new THREE.PointLight(0xffeedd, baseStarLightIntensity, BASE_STAR_LIGHT_DIST * MASTER_SCALING_FACTOR, 2); scene.add(starPointLight); } else { starPointLight.intensity = baseStarLightIntensity; starPointLight.distance = BASE_STAR_LIGHT_DIST * MASTER_SCALING_FACTOR; } starPointLight.position.copy(star.position); const spriteMaterial = new THREE.SpriteMaterial({ map: createGlowTexture(128, 0.15, 0.5), color: 0xffddaa, transparent: true, blending: THREE.AdditiveBlending, opacity: 0.6, depthWrite: false }); starGlow = new THREE.Sprite(spriteMaterial); starGlow.scale.set(starRadius * 4.0, starRadius * 4.0, 1.0); star.add(starGlow); }
+        function createPlanets() {
+             planetData.forEach(data => {
+                 const geometry = new THREE.SphereGeometry(data.radius, 32, 32); const material = new THREE.MeshStandardMaterial({ color: data.color, roughness: data.roughness, metalness: data.metalness, emissive: data.emissive || 0x000000, emissiveIntensity: data.emissiveIntensity || 0.5 }); const planetMesh = new THREE.Mesh(geometry, material); planetMesh.name = data.name;
+                 // Set initial position using Kepler for realism at T=0, animate loop will use visual pos
+                 planetMesh.position.copy(calculateKeplerianPosition(data, SIMULATION_EPOCH));
+                 scene.add(planetMesh);
+
+                 // Add rings specifically for Planet C
+                 if (data.name === "Planet C") {
+                     const ringInnerRadius = data.radius * 1.4;
+                     const ringOuterRadius = data.radius * 2.2;
+                     const ringSegments = 64;
+
+                     const ringGeometry = new THREE.RingGeometry(ringInnerRadius, ringOuterRadius, ringSegments);
+                     ringGeometry.rotateX(Math.PI / 2); // Rotate to align with XZ
+
+                     const ringMaterial = new THREE.MeshBasicMaterial({
+                         color: 0x88aaff,
+                         side: THREE.DoubleSide,
+                         transparent: true,
+                         opacity: 0.6,
+                         depthWrite: false
+                     });
+
+                     const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+                     ringMesh.rotation.x = 0.3; // Apply tilt relative to planet
+                     ringMesh.rotation.y = 0.15;
+                     planetMesh.add(ringMesh); // Add ring as child
+                     data.ringMesh = ringMesh; // Store reference
+                 }
+
+                 const atmosGeometry = new THREE.SphereGeometry(data.radius * atmosphereScale, 32, 32); const atmosMaterial = new THREE.ShaderMaterial({ uniforms: { c: { value: new THREE.Color(data.color) } }, vertexShader: "varying vec3 vN;varying vec3 vP;void main(){vec4 mP=modelViewMatrix*vec4(position,1.);vN=normalize(normalMatrix*normal);vP=-mP.xyz;gl_Position=projectionMatrix*mP;}", fragmentShader: "uniform vec3 c;varying vec3 vN;varying vec3 vP;void main(){vec3 N=normalize(vN);vec3 V=normalize(vP);float f=dot(N,V);f=clamp(1.-f,0.,1.);float i=pow(f,3.)*1.5;i=clamp(i,0.,1.);gl_FragColor=vec4(c,i*.8);}", side: THREE.BackSide, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false }); const atmosphere = new THREE.Mesh(atmosGeometry, atmosMaterial); planetMesh.add(atmosphere);
+                 // Add rings specifically for Planet C (AFTER atmosphere creation)
+                 if (data.name === "Planet C") {
+                     const ringInnerRadius = data.radius * 1.4;
+                     const ringOuterRadius = data.radius * 2.2;
+                     const ringSegments = 64;
+
+                     const ringGeometry = new THREE.RingGeometry(ringInnerRadius, ringOuterRadius, ringSegments);
+                     ringGeometry.rotateX(Math.PI / 2); // Rotate to align with XZ
+
+                     const ringMaterial = new THREE.MeshBasicMaterial({
+                         color: 0x88aaff,
+                         side: THREE.DoubleSide,
+                         transparent: true,
+                         opacity: 0.6,
+                         depthWrite: false
+                     });
+
+                     const ringMesh = new THREE.Mesh(ringGeometry, ringMaterial);
+                     ringMesh.rotation.x = 0.3; // Apply tilt relative to planet
+                     ringMesh.rotation.y = 0.15;
+                     planetMesh.add(ringMesh); // Add ring as child
+                     data.ringMesh = ringMesh; // Store reference
+                 }
+
+                 // Create accurate elliptical orbit line
+                 const orbitPoints = [];
+                 const numOrbitPoints = 200; // Number of points for the orbit line
+                 for (let i = 0; i <= numOrbitPoints; i++) {
+                     const timeInOrbit = (i / numOrbitPoints) * data.period; // Time progresses through one period
+                     const pos = calculateKeplerianPosition(data, SIMULATION_EPOCH + timeInOrbit);
+                     orbitPoints.push(pos);
+                 }
+                 const orbitGeometry = new THREE.BufferGeometry().setFromPoints(orbitPoints);
+                 const ringMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(data.color).lerp(new THREE.Color(0xcccccc), 0.6), opacity: 0.40, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+                 const orbitRing = new THREE.Line(orbitGeometry, ringMat); // Use Line, not Mesh
+                 // No rotations needed, points are already calculated in the correct orientation
+                 scene.add(orbitRing); // Add orbit line to the scene
+
+                 // Push planet data AFTER all its components (mesh, atmosphere, ring) are created
+                 planets.push({ mesh: planetMesh, data: data, atmosphere: atmosphere, orbitRing: orbitRing });
+
+                 const pElement = document.createElement('p');
+                 // Enhanced planet info in UI list
+                 const semiMajorAxis = (data.a / MASTER_SCALING_FACTOR).toFixed(1); // Show original scale value
+                 const orbitalPeriod = (data.period / SIMULATION_DAY_SCALE).toFixed(2); // Show original scale value
+                 pElement.innerHTML = `
+                     <strong style="color:#${material.color.getHexString()};cursor:pointer;" onclick="window.selectPlanetByName('${data.name}')">${data.name}</strong>
+                     <span class="planet-info">${data.info} | a: ${semiMajorAxis} AU | P: ${orbitalPeriod} days</span>`;
+                 pElement.title = `Click name to select ${data.name}`;
+                 ui.planetListContent.appendChild(pElement);
+             });
+        }
+        // Restore createStarfield function
+        function createStarfield() { const nearDist = BASE_STARFIELD_NEAR_DIST * MASTER_SCALING_FACTOR; const farDist = BASE_STARFIELD_FAR_DIST * MASTER_SCALING_FACTOR; particleGeometry=new THREE.BufferGeometry();const pts=[],cls=[],rns=[],pbc=new THREE.Color();for(let i=0;i<particleCount;i++){const r=THREE.MathUtils.randFloat(nearDist,farDist),t=Math.random()*Math.PI*2,p=Math.acos(THREE.MathUtils.randFloatSpread(2)),x=r*Math.sin(p)*Math.cos(t),y=r*Math.sin(p)*Math.sin(t),z=r*Math.cos(p);pts.push(x,y,z); const hue = THREE.MathUtils.randFloat(0.55, 0.75); const sat = THREE.MathUtils.randFloat(0.6, 0.9); const light = THREE.MathUtils.randFloat(0.4, 0.7); pbc.setHSL(hue, sat, light); cls.push(pbc.r,pbc.g,pbc.b);rns.push(Math.random(),Math.random())}particleBasePositions=new Float32Array(pts);particleGeometry.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));particleGeometry.setAttribute('color',new THREE.Float32BufferAttribute(cls,3));particleGeometry.setAttribute('random',new THREE.Float32BufferAttribute(rns,2)); const scaledAttenuation = BASE_STARFIELD_SIZE_ATTENUATION * MASTER_SCALING_FACTOR; particleMaterial=new THREE.ShaderMaterial({uniforms:{tm:{value:0},bs:{value:2.8}}, vertexShader:`attribute vec2 random;varying vec3 vC;varying float vTF;uniform float tm;uniform float bs;void main(){vC=color;vec4 mvP=modelViewMatrix*vec4(position,1.);float tF=tm*(.5+random.y*1.5);vTF=.5+abs(sin(tF+random.x*3.14159))*.5;gl_PointSize=bs*vTF*(${scaledAttenuation.toFixed(1)}/-mvP.z);gl_Position=projectionMatrix*mvP;}`, fragmentShader:"varying vec3 vC;varying float vTF;void main(){if(length(gl_PointCoord-vec2(.5,.5))>.475)discard;float a=vTF*.95; gl_FragColor=vec4(vC * (1.0 + vTF * 0.2),a); }", blending:THREE.AdditiveBlending,depthWrite:!1,transparent:!0,vertexColors:!0,fog:!1}); particles=new THREE.Points(particleGeometry,particleMaterial); particles.visible = true; scene.add(particles); console.log(`Starfield Points added to scene (${particleCount} particles).`); }
+        // Restore createDistantStars function
+        function createDistantStars() { const minDist = BASE_DISTANT_NEAR_DIST * MASTER_SCALING_FACTOR; const maxDist = BASE_DISTANT_FAR_DIST * MASTER_SCALING_FACTOR; const geometry = new THREE.BufferGeometry(); const pts = [], cls = [], rns = [], pbc = new THREE.Color(); for (let i = 0; i < distantParticleCount; i++) { const r = THREE.MathUtils.randFloat(minDist, maxDist); const t = Math.random() * Math.PI * 2; const p = Math.acos(THREE.MathUtils.randFloatSpread(2)); const x = r * Math.sin(p) * Math.cos(t); const y = r * Math.sin(p) * Math.sin(t); const z = r * Math.cos(p); pts.push(x, y, z); const hue = THREE.MathUtils.randFloat(0.58, 0.80); const sat = THREE.MathUtils.randFloat(0.4, 0.7); const light = THREE.MathUtils.randFloat(0.25, 0.5); pbc.setHSL(hue, sat, light); cls.push(pbc.r, pbc.g, pbc.b); rns.push(Math.random(), Math.random()); } distantParticleBasePositions = new Float32Array(pts); geometry.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)); geometry.setAttribute('color', new THREE.Float32BufferAttribute(cls, 3)); geometry.setAttribute('random', new THREE.Float32BufferAttribute(rns, 2)); const scaledAttenuation = BASE_DISTANT_SIZE_ATTENUATION * MASTER_SCALING_FACTOR; const vertexShader = particleMaterial.vertexShader.replace(`gl_PointSize=bs*vTF*(${ (BASE_STARFIELD_SIZE_ATTENUATION * MASTER_SCALING_FACTOR).toFixed(1) }/-mvP.z);`, `gl_PointSize=bs*vTF*(${scaledAttenuation.toFixed(1)}/-mvP.z);`); distantStarMaterial = new THREE.ShaderMaterial({ uniforms: { tm: { value: 0 }, bs: { value: 1.8 } }, vertexShader: vertexShader, fragmentShader: particleMaterial.fragmentShader.replace('a=vTF*.95', 'a=vTF*.75'), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, vertexColors: true, fog: false }); distantStars = new THREE.Points(geometry, distantStarMaterial); distantStars.visible = true; scene.add(distantStars); console.log(`Distant star layer created and added to scene (${distantParticleCount} particles).`); }
+        function createProceduralSky() { console.log("Creating Procedural Sky (Blue/Purple/Black Palette)..."); const skyGeo = new THREE.SphereGeometry(camera.far * 0.95, 64, 32); const skyMat = new THREE.ShaderMaterial({ uniforms: { time: { value: 0.0 }, color1: { value: new THREE.Color(0x020104) }, color2: { value: new THREE.Color(0x10184D) }, color3: { value: new THREE.Color(0x4D1A4D) }, color4: { value: new THREE.Color(0x082030) }, color5: { value: new THREE.Color(0x400A40) }, noiseScale1: { value: 1.8 }, noiseScale2: { value: 1.4 }, noiseScale3: { value: 2.6 }, noiseScale4: { value: 1.6 }, noiseScale5: { value: 3.8 }, noiseScale6: { value: 1.0 }, dustScale: { value: 9.0 }, brightnessFactor: { value: 0.85 }, contrastPower: { value: 1.9 } }, vertexShader: ` varying vec3 vDirection; void main() { vec4 worldPosition = modelMatrix * vec4( position, 1.0 ); vDirection = normalize( worldPosition.xyz - cameraPosition ); gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 ); gl_Position.z = gl_Position.w * 0.99999; } `, fragmentShader: ` varying vec3 vDirection; uniform float time; uniform vec3 color1; uniform vec3 color2; uniform vec3 color3; uniform vec3 color4; uniform vec3 color5; uniform float noiseScale1; uniform float noiseScale2; uniform float noiseScale3; uniform float noiseScale4; uniform float noiseScale5; uniform float noiseScale6; uniform float dustScale; uniform float brightnessFactor; uniform float contrastPower; ${shaderNoiseFunctions} void main() { vec3 dir = vDirection; float time1 = time * 0.015; float time2 = time * 0.025; float time3 = time * 0.01; float time4 = time * 0.03; float time5 = time * -0.02; float time6 = time * 0.012; float pattern1 = safeFBM(dir * noiseScale1 + vec3(time1, -time1 * 0.5, time1 * 0.2), 6, 0.5, 2.1); float pattern2 = safeFBM(dir * noiseScale2 + vec3(-time2 * 0.3, time2, -time2 * 0.6), 5, 0.45, 2.3); float pattern3 = safeFBM(dir * noiseScale3 + vec3(time3 * 0.8, time3 * 0.4, time3), 7, 0.55, 2.0); float pattern4 = safeFBM(dir.yxz * noiseScale4 + vec3(-time4, -time4 * 0.2, time4 * 0.7), 4, 0.5, 2.2); float pattern5 = safeFBM(dir.zyx * noiseScale5 + vec3(time5 * 0.6, -time5, time5 * 0.3), 5, 0.5, 2.2); float pattern6 = safeFBM(dir * noiseScale6 + vec3(time6 * 0.2, time6 * 0.9, -time6 * 0.4), 4, 0.4, 2.5); vec3 finalColor = color1 * 1.0; finalColor = mix(finalColor, color2, pow(smoothstep(0.35, 0.7, pattern1), contrastPower) * 0.85); finalColor = mix(finalColor, color3, pow(smoothstep(0.5, 0.65, pattern2), contrastPower) * 0.15); finalColor = mix(finalColor, color4, pow(smoothstep(0.55, 0.7, pattern3), contrastPower) * 0.20); finalColor = mix(finalColor, color5, pow(smoothstep(0.45, 0.6, pattern6), contrastPower) * 0.30); finalColor = mix(finalColor, mix(color1, color2, 0.6), pow(smoothstep(0.4, 0.6, pattern5), contrastPower) * 0.4); float fineDust = safeFBM(dir * 15.0 + time * 0.05, 3, 0.6, 2.0); finalColor = mix(finalColor, mix(color2, color3, 0.2), pow(fineDust, 3.0) * 0.15); finalColor = mix(finalColor, mix(color1, color4, 0.5), pow(smoothstep(0.3, 0.6, pattern4), contrastPower) * 0.25); float dustLaneNoise = safeFBM(dir * dustScale + time * 0.01, 4, 0.5, 2.0); float dustFactor = 1.0 - smoothstep(0.45, 0.55, dustLaneNoise) * 0.5; finalColor *= dustFactor; float grain = noise(dir.xy * 90.0 + time * 0.3) * 0.025; finalColor += grain; finalColor *= brightnessFactor; finalColor = clamp(finalColor, 0.0, 1.0); if (isnan(finalColor.x) || isinf(finalColor.x)) finalColor = vec3(0.01, 0.0, 0.01); gl_FragColor = vec4(finalColor, 1.0); } `, side: THREE.BackSide, depthWrite: false, fog: false }); proceduralSky = new THREE.Mesh(skyGeo, skyMat); scene.add(proceduralSky); console.log("Procedural Sky added."); }
+        function createNebulaMaterial() { const vertexShader = ` varying vec2 vUv; varying vec3 vWorldPosition; void main() { vUv = uv; vec4 worldPos = modelMatrix * vec4(position, 1.0); vWorldPosition = worldPos.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); } `; const fragmentShader = ` uniform float time; uniform vec3 nebulaColor1; uniform vec3 nebulaColor2; uniform float noiseScale; uniform float brightness; varying vec2 vUv; varying vec3 vWorldPosition; ${shaderNoiseFunctions} vec2 warp(vec2 p, float amplitude) { vec2 q = vec2( FBM(p + vec2(0.0,1.0), 3, 0.5, 2.0), FBM(p + vec2(5.2,1.3), 3, 0.5, 2.0)); return p + amplitude * q; } void main() { vec2 warpedUv = warp(vWorldPosition.xy * 0.0001 * noiseScale, 0.05); float noise1 = safeFBM(warpedUv * 1.5 + time * 0.01, 5, 0.5, 2.2); float noise2 = safeFBM(vWorldPosition.xyz * 0.00008 * noiseScale + time * 0.005, 4, 0.55, 2.0); float combinedNoise = smoothstep(0.3, 0.7, noise1 * 0.6 + noise2 * 0.4); float edgeFade = length(vUv - 0.5) * 2.0; float alpha = pow(combinedNoise, 1.5) * (1.0 - smoothstep(0.7, 1.0, edgeFade)); alpha = clamp(alpha * brightness, 0.0, 1.0); vec3 color = mix(nebulaColor1, nebulaColor2, smoothstep(0.4, 0.6, noise2)); gl_FragColor = vec4(color, alpha); } `; return new THREE.ShaderMaterial({ uniforms: { time: { value: 0.0 }, nebulaColor1: { value: new THREE.Color(0x301050) }, nebulaColor2: { value: new THREE.Color(0x6040B0) }, noiseScale: { value: THREE.MathUtils.randFloat(0.8, 1.5) }, brightness: { value: THREE.MathUtils.randFloat(0.3, 0.6) } }, vertexShader, fragmentShader, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide }); }
+        function createNebulas() { const nebulaGeo = new THREE.PlaneGeometry(1, 1); for (let i = 0; i < NEBULA_COUNT; i++) { const material = createNebulaMaterial(); const nebulaMesh = new THREE.Mesh(nebulaGeo, material); const dist = THREE.MathUtils.randFloat( BASE_DISTANT_NEAR_DIST * 0.8, BASE_DISTANT_FAR_DIST * 0.7 ); const theta = Math.random() * Math.PI * 2; const phi = Math.acos(THREE.MathUtils.randFloatSpread(1.8)); nebulaMesh.position.setFromSphericalCoords(dist, phi, theta); const scale = NEBULA_BASE_SIZE * THREE.MathUtils.randFloat(0.8, 2.0); nebulaMesh.scale.set(scale, scale * THREE.MathUtils.randFloat(0.4, 0.8), 1.0); nebulaMesh.rotation.set( Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2 ); scene.add(nebulaMesh); nebulas.push(nebulaMesh); } console.log(`Created ${NEBULA_COUNT} nebula planes.`); }
+        function createComet() { console.log("Creating comet..."); comet = new Comet(scene); }
+        function createComet2() {
+            console.log("Creating comet 2...");
+            comet2 = new Comet(scene);
+            // Slightly different parameters for visual distinction
+            comet2.speed = 0.12;
+            comet2.orbitRadiusX = BASE_COMET_ORBIT_X * MASTER_SCALING_FACTOR * 1.2;
+            comet2.orbitRadiusZ = BASE_COMET_ORBIT_Z * MASTER_SCALING_FACTOR * 0.8;
+            comet2.orbitTilt = -0.15;
+            comet2.headColor = new THREE.Color(0xffddcc); // More orange/red tint
+            comet2.tailColorStart = new THREE.Color(0xffaa88);
+            comet2.name = "comet2"; // Ensure unique name
+            comet2.headMesh.name = "comet2";
+        }
+        function createBlackHole() { console.log("Creating Black Hole (Gaia BH1)..."); const bhParticles = gaiaBH1Data.particleCount; const bhRadius = gaiaBH1Data.diskRadius; const bhThickness = gaiaBH1Data.diskThickness; const geometry = new THREE.BufferGeometry(); const positions = new Float32Array(bhParticles * 3); const colors = new Float32Array(bhParticles * 3); const sizes = new Float32Array(bhParticles); const colorInner = new THREE.Color(0x331105); const colorOuter = new THREE.Color(0x110500); const colorCenter = new THREE.Color(0x000000); for (let i = 0; i < bhParticles; i++) { const i3 = i * 3; const radius = Math.sqrt(Math.random()) * bhRadius; const angle = Math.random() * Math.PI * 2; const y = THREE.MathUtils.randFloatSpread(bhThickness); positions[i3 + 0] = Math.cos(angle) * radius; positions[i3 + 1] = y; positions[i3 + 2] = Math.sin(angle) * radius; const radiusRatio = radius / bhRadius; const innerRadiusRatio = 0.05; let particleColor = new THREE.Color(); if (radiusRatio < innerRadiusRatio) { particleColor.lerpColors(colorCenter, colorInner, radiusRatio / innerRadiusRatio); } else { particleColor.lerpColors(colorInner, colorOuter, (radiusRatio - innerRadiusRatio) / (1.0 - innerRadiusRatio)); } colors[i3 + 0] = particleColor.r; colors[i3 + 1] = particleColor.g; colors[i3 + 2] = particleColor.b; sizes[i] = THREE.MathUtils.randFloat(BASE_BH_PARTICLE_SIZE_MIN, BASE_BH_PARTICLE_SIZE_MAX) * MASTER_SCALING_FACTOR * (1.0 - radiusRatio * 0.5); } geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3)); geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3)); geometry.setAttribute('pointSize', new THREE.BufferAttribute(sizes, 1)); const material = new THREE.PointsMaterial({ vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.85, depthWrite: false, sizeAttenuation: true }); material.onBeforeCompile = shader => { shader.vertexShader = 'attribute float pointSize;\n' + shader.vertexShader; shader.vertexShader = shader.vertexShader.replace( 'gl_PointSize = size;', 'gl_PointSize = pointSize;' ); }; blackHole = new THREE.Points(geometry, material); blackHole.name = gaiaBH1Data.name; blackHole.position.copy(gaiaBH1Data.position); blackHole.rotation.x = Math.PI * 0.4; blackHole.rotation.y = Math.PI * 0.1; scene.add(blackHole); console.log(`Black Hole Points added at ${blackHole.position.z.toFixed(0)} Z with ${bhParticles} particles. Disk Radius: ${bhRadius.toFixed(0)}`); }
+        function setupPostProcessing() { composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera)); const bloomPass = new UnrealBloomPass( new THREE.Vector2(window.innerWidth, window.innerHeight), 1.8, 1.1, 0.15 ); composer.addPass(bloomPass); console.log("Bloom Pass Setup (Enhanced):", { strength: bloomPass.strength, radius: bloomPass.radius, threshold: bloomPass.threshold }); }
+        function initLabels() { console.log("Initializing Labels..."); const starLabelDiv = document.getElementById('label-CoRoT-2a'); if (star && starLabelDiv) { labels[star.name] = { element: starLabelDiv, object: star, color: '#FFD700' }; } else { console.warn("Could not find Star or its label element"); } planets.forEach(p => { const labelDiv = document.getElementById(`label-${p.data.name}`); if (labelDiv) { labels[p.data.name] = { element: labelDiv, object: p.mesh, color: `#${p.mesh.material.color.getHexString()}` }; } else { console.warn(`Could not find label element for ${p.data.name}`); } }); const cometLabelDiv = document.getElementById('label-comet'); if (comet && cometLabelDiv) { labels[comet.name] = { element: cometLabelDiv, object: comet.headMesh, color: `#${comet.headColor.getHexString()}` }; } else { console.warn("Could not find Comet or its label element"); } const comet2LabelDiv = document.getElementById('label-comet2'); if (comet2 && comet2LabelDiv) { labels[comet2.name] = { element: comet2LabelDiv, object: comet2.headMesh, color: `#${comet2.headColor.getHexString()}` }; } else { console.warn("Could not find Comet 2 or its label element"); } const bhLabelDiv = document.getElementById('label-gaia-bh1'); if (blackHole && bhLabelDiv) { labels[gaiaBH1Data.name] = { element: bhLabelDiv, object: blackHole, color: '#AAAAFF' }; } else { console.warn("Could not find Black Hole or its label element"); } console.log("Labels Initialized:", Object.keys(labels).length); }
+        function addEventListeners() { 
+            window.addEventListener('resize', onWindowResize, false);
+            renderer.domElement.addEventListener('mousemove', onDocumentMouseMove, false);
+            window.changeTimeScale = changeTimeScale;
+            window.resetView = resetView;
+            window.toggleFollowPlanet = toggleFollowPlanet;
+            window.selectPlanetByName = selectPlanetByName;
+            window.toggleSection = toggleSection;
+            window.viewBlackHole = viewBlackHole;
+            window.showBlackHoleInfo = showBlackHoleInfo;
+            window.hideBlackHoleInfo = hideBlackHoleInfo;
+
+            // Add drag functionality to controls bar
+            const controlsBar = document.getElementById('controls-bar');
+            let isDragging = false;
+            let startX, startY, initialLeft, initialTop;
+
+            if (controlsBar) {
+                controlsBar.addEventListener('mousedown', (e) => {
+                    // Prevent dragging if clicking on a button inside the bar
+                    if (e.target.tagName === 'BUTTON' || e.target.tagName === 'SPAN') {
+                        return;
+                    }
+                    isDragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    initialLeft = controlsBar.offsetLeft;
+                    initialTop = controlsBar.offsetTop;
+                    controlsBar.style.cursor = 'grabbing'; // Change cursor immediately
+                    // Add listeners to window to capture mouse movements outside the bar
+                    window.addEventListener('mousemove', onDrag);
+                    window.addEventListener('mouseup', onDragEnd);
+                });
+            }
+
+            function onDrag(e) {
+                if (!isDragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                controlsBar.style.left = `${initialLeft + dx}px`;
+                controlsBar.style.top = `${initialTop + dy}px`;
+            }
+
+            function onDragEnd() {
+                if (!isDragging) return;
+                isDragging = false;
+                controlsBar.style.cursor = 'grab'; // Restore cursor
+                // Remove window listeners
+                window.removeEventListener('mousemove', onDrag);
+                window.removeEventListener('mouseup', onDragEnd);
+            }
+        }
+
+        // --- Event Handlers and UI Functions --- (Largely unchanged)
+        function handleControlStart() { if (isInitialZooming || isInBHView) return; console.log("OrbitControls interaction started."); stopAutoFollow(); clearLabelTimers(); resetInactivityTimer(); }
+        function handlePointerDown(event) { if (isInitialZooming || isInBHView) return; if (event.button === 0) { console.log("Pointer down interaction."); stopAutoFollow(); clearLabelTimers(); resetInactivityTimer(); onDocumentMouseDown(event); } }
+        function handleWheel() { if (isInitialZooming || isInBHView) return; console.log("Wheel interaction."); stopAutoFollow(); resetInactivityTimer(); }
+        function showBlackHoleInfo() { console.log("Showing Black Hole Info Panel"); if (ui.uiContainer) ui.uiContainer.classList.add('hidden'); if (ui.bhInfoPanel) ui.bhInfoPanel.classList.remove('hidden'); isShowingBHInfo = true; }
+        function hideBlackHoleInfo() { console.log("Hiding Black Hole Info Panel, resetting view..."); resetView(); }
+        function checkLoadingComplete() { if (initComplete) { console.log(`--- Initialization complete ---`); if (ui.loadingOverlay) { ui.loadingOverlay.classList.add('hidden'); } if (composer) { startAnimation(); } else { console.error("Composer not ready..."); if (ui.loadingText) ui.loadingText.textContent = "Error: Post-processing failed."; } } else if (ui.loadingText && !ui.loadingOverlay.classList.contains('hidden')) { ui.loadingText.textContent = `Initializing...`; } }
+        function createGlowTexture(s=64,i=.1,o=.5,h=!1){const c=document.createElement('canvas');c.width=s;c.height=s;const x=c.getContext('2d'),g=x.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);return h?(g.addColorStop(0,'rgba(255,255,255,1)'),g.addColorStop(i,'rgba(255,255,220,.8)'),g.addColorStop(o,'rgba(200,200,200,.1)'),g.addColorStop(1,'rgba(150,150,150,0)')):(g.addColorStop(0,'rgba(255,255,255,1)'),g.addColorStop(i,'rgba(255,220,150,.9)'),g.addColorStop(o,'rgba(255,180,50,.5)'),g.addColorStop(1,'rgba(255,150,0,0)')),x.fillStyle=g,x.fillRect(0,0,s,s),new THREE.CanvasTexture(c)}
+        function onWindowResize(){camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);composer.setSize(window.innerWidth,window.innerHeight)}
+        function getTransitDepth(p){const m=p.mesh,d=p.data,w=tempVector,o=m.getWorldPosition(w),s=star.position,q=camera.position.distanceToSquared(o),x=camera.position.distanceToSquared(s);if(q>x*1.01)return 0;const c=camera.position,l=s.clone().sub(c).normalize(),r=o.clone().sub(c),j=r.dot(l);if(j<=0)return 0;const v=r.clone().sub(l.multiplyScalar(j));const y=v.length(),z=d.radius;if(y<starRadius+z){ const k0=Math.acos(Math.max(-1,Math.min(1,(y*y+z*z-starRadius*starRadius)/(2*y*z)))); const k1=Math.acos(Math.max(-1,Math.min(1,(y*y+starRadius*starRadius-z*z)/(2*y*starRadius)))); const area=k1*starRadius*starRadius-(starRadius*starRadius*Math.sin(2*k1))/2+k0*z*z-(z*z*Math.sin(2*k0))/2;return isNaN(area)?0:Math.min(1.0,area/(Math.PI*starRadius*starRadius))}return 0}
+        function changeTimeScale(f){if(isInitialZooming || isInBHView) return; if(f===1) timeScale = 1.0; else timeScale*=f;timeScale=Math.max(.05,Math.min(timeScale,32));ui.timeScaleDisplay.textContent=timeScale.toFixed(1); resetInactivityTimer(); }
+        function resetView(){ stopAutoFollow(); isInitialZooming = false; isInBHView = false; isShowingBHInfo = false; controls.enabled = true; controls.autoRotate = false; selectedObject = null; isFollowingObject = false; console.log("Resetting View to Solar System Default..."); controls.reset(); camera.position.copy(defaultCameraPosition); controls.target.set(0,0,0); controls.update(); if (ui.uiContainer) ui.uiContainer.classList.remove('hidden'); if (ui.bhInfoPanel) ui.bhInfoPanel.classList.add('hidden'); const b = ui.followButton; if (b) { b.classList.remove("active"); b.disabled = true; } updateSelectedObjectUI(); resetInactivityTimer(); }
+        function viewBlackHole() { if (!blackHole) { console.warn("Black hole object not found!"); return; } if (isInitialZooming) return; console.log("Switching to Black Hole view..."); stopAutoFollow(); isInBHView = true; controls.enabled = false; const offsetDistance = gaiaBH1Data.diskRadius * 2.5; const targetPos = gaiaBH1Data.position; const cameraPos = targetPos.clone() .add(new THREE.Vector3(0, offsetDistance * 0.5, offsetDistance)); camera.position.copy(cameraPos); controls.target.copy(targetPos); camera.lookAt(targetPos); controls.update(); selectedObject = null; isFollowingObject = false; if (ui.followButton) { ui.followButton.classList.remove("active"); ui.followButton.disabled = true; } updateSelectedObjectUI(); showBlackHoleInfo(); }
+        function toggleSection(h, c) {
+            const t = document.getElementById(c);
+            if (h && t) {
+                h.classList.toggle("collapsed");
+                t.classList.toggle("collapsed");
+            }
+        }
+        function onDocumentMouseMove(e) {
+            if (isInitialZooming || isInBHView) return;
+            e.preventDefault();
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const hoverTargets = planets.map(p => p.mesh);
+            if (comet) hoverTargets.push(comet.headMesh);
+            if (comet2) hoverTargets.push(comet2.headMesh);
+            const intersects = raycaster.intersectObjects(hoverTargets, false);
+            let currentlyHovering = null;
+            if (intersects.length > 0) {
+                const firstIntersected = intersects[0].object;
+                if (labels[firstIntersected.name]) {
+                    currentlyHovering = firstIntersected.name;
+                }
+            }
+            if (hoveredObjectName !== currentlyHovering) {
+                if (currentlyHovering) {
+                    hoveredObjectName = currentlyHovering;
+                    renderer.domElement.style.cursor = 'pointer';
+                    clearLabelTimers();
+                    labelCooldownActive = false;
+                } else {
+                    hoveredObjectName = null;
+                    renderer.domElement.style.cursor = 'default';
+                    if (!labelsInitiallyVisible && !labelCooldownActive && hoveredObjectName !== gaiaBH1Data.name) {
+                        startLabelCooldown();
+                    }
+                }
+            }
+        }
+        function onDocumentMouseDown(e) {
+            if (isInitialZooming || isInBHView) return;
+            if (e.button !== 0) return;
+            if (isShowingBHInfo) return;
+            raycaster.setFromCamera(mouse, camera);
+            const selectionTargets = planets.map(p => p.mesh);
+            if (comet) selectionTargets.push(comet.headMesh);
+            if (comet2) selectionTargets.push(comet2.headMesh); // <<< ADDED
+            const intersects = raycaster.intersectObjects(selectionTargets, false);
+            if (intersects.length > 0) {
+                const name = intersects[0].object.name;
+                const planetObj = planets.find(p => p.data.name === name);
+                if (planetObj) {
+                    selectObject(planetObj);
+                } else if (name === comet?.name) {
+                    console.log("Comet selected for potential follow");
+                    selectObject(comet);
+                } else if (name === comet2?.name) {
+                    selectObject(comet2);
+                } // <<< ADDED
+            } else {
+                const labelElement = document.elementFromPoint(e.clientX, e.clientY);
+                if (!labelElement || !labelElement.classList.contains('object-label')) {
+                    selectObject(null);
+                }
+            }
+            renderer.domElement.style.cursor = 'default';
+        }
+        function selectObject(obj) { 
+            stopAutoFollow(); 
+            selectedObject = obj; 
+            ui.followButton.disabled = !obj; 
+            if (obj && isFollowingObject) { 
+                const targetMesh = obj.mesh || obj.headMesh; 
+                controls.target.copy(targetMesh.getWorldPosition(new THREE.Vector3())); 
+                ui.followButton.classList.add("active"); 
+            } else if (!obj) { 
+                isFollowingObject = false; 
+                if (!isInitialZooming) controls.target.set(0, 0, 0); 
+                if (ui.followButton) ui.followButton.classList.remove("active"); 
+            } else { 
+                if (ui.followButton) ui.followButton.classList.remove("active"); 
+            } 
+            updateSelectedObjectUI(); 
+        } // <<< Added missing closing brace
+        function selectPlanetByName(n){ if(isInitialZooming || isInBHView) return; const p=planets.find(p=>p.data.name===n); selectObject(p); resetInactivityTimer();}
+        function toggleFollowPlanet(){ if (isInitialZooming || isInBHView) return; if (!selectedObject) return; stopAutoFollow(); isFollowingObject = !isFollowingObject; ui.followButton.classList.toggle("active", isFollowingObject); if (!isFollowingObject) { controls.target.set(0, 0, 0); controls.autoRotate = false; } else { controls.autoRotate = false; const targetMesh = selectedObject.mesh || selectedObject.headMesh; controls.target.copy(targetMesh.getWorldPosition(new THREE.Vector3())); } controls.update(); resetInactivityTimer(); }
+        function updateSelectedObjectUI(){ let nameToShow = "None"; if (selectedObject) { nameToShow = selectedObject.data?.name || selectedObject.name; } ui.selectedPlanet.textContent = nameToShow; }
+        function stopAutoFollow() { if (isAutoFollowing) { console.log("Stopping auto-follow timeout/state."); isAutoFollowing = false; clearTimeout(autoUnfollowTimeoutId); autoUnfollowTimeoutId = null; } clearTimeout(inactivityTimerId); }
+        function clearLabelTimers() { clearTimeout(labelReappearTimeoutId); labelReappearTimeoutId = null; clearTimeout(labelCooldownTimeoutId); labelCooldownTimeoutId = null; labelCooldownActive = false; }
+        function startLabelCooldown() { clearLabelTimers(); console.log("Starting label cooldown..."); labelCooldownActive = true; labelCooldownTimeoutId = setTimeout(() => { console.log("Label cooldown finished. Reappearing..."); labelCooldownActive = false; labelsInitiallyVisible = true; labelReappearTimeoutId = setTimeout(() => { console.log("Label reappear duration ended."); labelsInitiallyVisible = false; }, LABEL_REAPPEAR_DURATION); }, LABEL_COOLDOWN_DURATION); }
+        function initShootingStars(){ const m = new THREE.PointsMaterial({ color: 0xffffff, size: BASE_SHOOTING_STAR_SIZE * MASTER_SCALING_FACTOR, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.9, sizeAttenuation: true, depthWrite: false }); console.log("Shooting star material:", m); for(let i=0; i<MAX_SHOOTING_STARS; i++){ const pts=[new THREE.Vector3(10000, 10000, 10000)]; const geo=new THREE.BufferGeometry().setFromPoints(pts); const p=new THREE.Points(geo,m.clone()); p.name = `shooting_star_${i}`; p.visible=false; scene.add(p); const added = scene.getObjectByName(p.name); if (!added) console.error(`!!! FAILED TO ADD shooting_star_${i} TO SCENE !!!`); shootingStars.push({mesh:p,velocity:new THREE.Vector3(),lifetime:0,active:false}); } console.log(`Initialized ${MAX_SHOOTING_STARS} shooting star objects.`); }
+        function spawnShootingStar() { const s=shootingStars.find(s=>!s.active); if(!s) return; s.active=true; s.mesh.visible=true; s.lifetime=SHOOTING_STAR_LIFETIME * (0.8 + Math.random() * 0.4); let startPos = new THREE.Vector3(); let targetPos = new THREE.Vector3(); if (Math.random() < 0.75) { const dist = THREE.MathUtils.randFloat(camera.near + 200, camera.near + 800); const ndcX = THREE.MathUtils.randFloat(-0.8, 0.8); const ndcY = THREE.MathUtils.randFloat(-0.6, 0.6); tempVectorNDC.set(ndcX, ndcY, -1.0); tempVectorNDC.unproject(camera); tempVectorNDC.sub(camera.position).normalize(); startPos.copy(camera.position).addScaledVector(tempVectorNDC, dist); const targetDist = dist + SHOOTING_STAR_SPEED * s.lifetime * 0.7; const sideDirection = tempVector.copy(tempVectorNDC).cross(camera.up).normalize(); if (Math.random() < 0.5) sideDirection.negate(); const targetDirection = tempVectorNDC.clone().multiplyScalar(0.2).addScaledVector(sideDirection, 0.8).normalize(); targetPos.copy(camera.position).addScaledVector(targetDirection, targetDist); } else { const d = BASE_DISTANT_FAR_DIST * 0.8; const angle = Math.random() * Math.PI * 2; const startX = Math.cos(angle) * d; const startZ = Math.sin(angle) * d; const startY = THREE.MathUtils.randFloatSpread(d * 0.3); startPos.set(startX, startY, startZ); targetPos.set( THREE.MathUtils.randFloatSpread(BASE_DISTANT_NEAR_DIST * 0.5), THREE.MathUtils.randFloatSpread(BASE_DISTANT_NEAR_DIST * 0.1), THREE.MathUtils.randFloatSpread(BASE_DISTANT_NEAR_DIST * 0.5) ); } s.mesh.position.copy(startPos); s.velocity.copy(targetPos).sub(startPos).normalize().multiplyScalar(SHOOTING_STAR_SPEED * (0.9 + Math.random()*0.3)); }
+        function updateShootingStars(delta){ const targetProbability = 3.0; let spawnAttempts = Math.max(1, Math.floor(targetProbability * delta * timeScale * 25)); for (let i = 0; i < spawnAttempts; i++) { if (Math.random() < targetProbability * delta * 0.7 ) { spawnShootingStar(); } } let activeCount = 0; for(const s of shootingStars){ if(!s.active) continue; activeCount++; s.lifetime -= delta * timeScale; if(s.lifetime <= 0){ s.active = false; s.mesh.visible = false; s.mesh.position.set(10000, 10000, 10000); } else { s.mesh.position.addScaledVector(s.velocity, delta * timeScale); s.mesh.material.opacity = Math.max(0, s.lifetime / SHOOTING_STAR_LIFETIME) * 0.95; } } }
+        function updateLabels() { const screenWidth = renderer.domElement.clientWidth; const screenHeight = renderer.domElement.clientHeight; for (const name in labels) { const label = labels[name]; if (!label || !label.object || !label.element) continue; const object = label.object; const element = label.element; let showThisLabel = false; if (name === gaiaBH1Data.name) { showThisLabel = true; } else if (hoveredObjectName === name) { showThisLabel = true; } else if (labelsInitiallyVisible) { showThisLabel = true; } if (showThisLabel) { object.getWorldPosition(tempVector); tempVector.project(camera); if (tempVector.z > 1 || Math.abs(tempVector.x) > 1.1 || Math.abs(tempVector.y) > 1.1) { element.classList.remove('visible'); } else { const x = (tempVector.x * 0.5 + 0.5) * screenWidth; const y = (-tempVector.y * 0.5 + 0.5) * screenHeight; element.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -150%)`; element.style.setProperty('--label-color', label.color); element.classList.add('visible'); } } else { element.classList.remove('visible'); } } }
+        function resetInactivityTimer() { clearTimeout(inactivityTimerId); if (!isInBHView) inactivityTimerId = setTimeout(autoLockOnComet, INACTIVITY_TIMEOUT_DURATION); }
+        function autoLockOnComet() { if (isInitialZooming || isInBHView) return; console.log("Inactivity timeout reached."); if (!comet) { console.log("Comet not found, cannot auto-lock."); resetInactivityTimer(); return; } if (selectedObject === comet && isFollowingObject) { console.log("Already following comet, resetting timer."); resetInactivityTimer(); return; } console.log("Auto-locking camera onto comet."); stopAutoFollow(); selectObject(comet); isFollowingObject = true; if(ui.followButton) ui.followButton.classList.add("active"); controls.autoRotate = false; }
+
+        // --- Animation Loop ---
+        function startAnimation() { if (isAnimating) return; isAnimating = true; console.log("Starting animation loop."); animate(); }
+        function animate() {
+             if (!isAnimating) return; requestAnimationFrame(animate);
+ 
+             try {
+                 const delta = Math.min(0.05, clock.getDelta()); if (delta <= 0) return;
+                 const scaledDelta = delta * timeScale;
+                 const elapsedTime = clock.getElapsedTime();
+                 const currentTime = SIMULATION_EPOCH + elapsedTime * timeScale;
+
+                 if (!isInBHView) {
+                     planets.forEach(p=>{
+                         // Use accurate Keplerian position for planet mesh
+                         const newPos = calculateKeplerianPosition(p.data, currentTime);
+                         p.mesh.position.copy(newPos);
+                         p.mesh.rotation.y += 0.05 * scaledDelta; // Keep planet rotating
+                         
+                         // Rotate Planet C's rings if they exist
+                         if (p.data.ringMesh) {
+                            p.data.ringMesh.rotation.z -= 0.015 * scaledDelta;
+                         }
+                        });
+                     if(proceduralSky) proceduralSky.rotation.y += 0.0001 * scaledDelta;
+                     nebulas.forEach(neb => { if(neb.material.uniforms.time) neb.material.uniforms.time.value = elapsedTime * 0.5; neb.lookAt(camera.position); });
+                     if (comet) comet.update(delta, star.position);
+                     if (comet2) comet2.update(delta, star.position); // <<< ADDED
+                 }
+                 if (blackHole) blackHole.rotation.y += 0.008 * scaledDelta;
+                 updateShootingStars(delta);
+
+                 // Intro Zoom Logic (remains same)
+                 if (isInitialZooming) { const zoomElapsed = elapsedTime - initialZoomStartTime; const zoomProgress = Math.min(1.0, zoomElapsed / initialZoomDuration); const easedProgress = easeInOutCubic(zoomProgress); const currentTargetPos = planets.find(p => p.data.name === "CoRoT-2b")?.mesh.getWorldPosition(tempVector2).clone() || introZoomEndTarget; introZoomEndTarget.copy(currentTargetPos); camera.position.copy(introZoomStartPos).lerp(defaultCameraPosition, easedProgress); controls.target.copy(introZoomStartTarget).lerp(introZoomEndTarget, easedProgress); controls.update(); if (zoomProgress >= 1.0) { console.log("Initial zoom complete."); isInitialZooming = false; controls.enabled = true; controls.autoRotate = false; resetInactivityTimer(); camera.position.copy(defaultCameraPosition); controls.target.copy(introZoomEndTarget); } }
+                 // Camera Follow Logic (Reverted to use lerp)
+                 else if (!isInBHView) { 
+                     if (isFollowingObject && selectedObject) { 
+                         const targetMesh = selectedObject.mesh || selectedObject.headMesh; 
+                         if (targetMesh) { 
+                             controls.target.lerp(targetMesh.getWorldPosition(tempVector), 0.1); 
+                         } else { 
+                             console.warn("Following target mesh invalid. Stopping follow."); 
+                             selectObject(null); 
+                             if(ui.followButton) ui.followButton.classList.remove("active"); 
+                         } 
+                     } else if (!isFollowingObject && !isAutoFollowing && controls.target.lengthSq() > .01) { 
+                         controls.target.lerp(new THREE.Vector3(0,0,0), 0.05); 
+                     } 
+                     controls.update(); 
+                 }
+
+                // Update Materials/Effects (remains same)
+                 if(star?.material.uniforms?.time) star.material.uniforms.time.value = elapsedTime; if (starPointLight) { starPointLight.intensity = baseStarLightIntensity + Math.sin(elapsedTime * 2.5) * 0.8; } if(proceduralSky?.material.uniforms?.time) proceduralSky.material.uniforms.time.value = elapsedTime; if(particleMaterial?.uniforms?.tm) particleMaterial.uniforms.tm.value = elapsedTime; if(distantStarMaterial?.uniforms?.tm) distantStarMaterial.uniforms.tm.value = elapsedTime * 0.8; const gp=1+.03*Math.sin(elapsedTime*4);if(starGlow){starGlow.scale.set(starRadius*4.0*gp,starRadius*4.0*gp,1);starGlow.material.opacity=.6+.05*Math.sin(elapsedTime*4.1)}
+                 // Parallax Updates (remains same)
+                 const scaledStarfieldMaxDist = BASE_STARFIELD_FAR_DIST * MASTER_SCALING_FACTOR; if (particleBasePositions && particleGeometry?.attributes?.position) { const camOffset = camera.position.clone().sub(defaultCameraPosition); const posArray = particleGeometry.attributes.position.array; const maxDistSq = scaledStarfieldMaxDist**2; for(let i=0; i<particleCount; i++){ const i3=i*3,bx=particleBasePositions[i3],by=particleBasePositions[i3+1],bz=particleBasePositions[i3+2]; const distSq=bx*bx+by*by+bz*bz; const depthFactor=Math.max(0.05,1-distSq/maxDistSq); posArray[i3]=bx+camOffset.x*parallaxFactor*depthFactor; posArray[i3+1]=by+camOffset.y*parallaxFactor*depthFactor; } particleGeometry.attributes.position.needsUpdate = true; }
+                 const scaledDistantMaxDist = BASE_DISTANT_FAR_DIST * MASTER_SCALING_FACTOR; if (distantParticleBasePositions && distantStars?.geometry?.attributes?.position) { const camOffset = camera.position.clone().sub(defaultCameraPosition); const posArray = distantStars.geometry.attributes.position.array; const maxDistSq = scaledDistantMaxDist**2; for(let i=0; i<distantParticleCount; i++){ const i3=i*3,bx=distantParticleBasePositions[i3],by=distantParticleBasePositions[i3+1],bz=distantParticleBasePositions[i3+2]; const distSq=bx*bx+by*by+bz*bz; const depthFactor=Math.max(0.02,1-distSq/maxDistSq); posArray[i3]=bx+camOffset.x*distantParallaxFactor*depthFactor; posArray[i3+1]=by+camOffset.y*distantParallaxFactor*depthFactor; } distantStars.geometry.attributes.position.needsUpdate = true; }
+
+                // Update Light Curve (remains same - still uses physical transit check)
+                 if (!isInBHView) { let currentBrightness = 1.0; let isTransiting = false; let transitingPlanetName = "None"; planets.forEach(p => { const depth = getTransitDepth(p); if (depth > 0) { currentBrightness -= depth; isTransiting = true; transitingPlanetName = p.data.name; const pulseScale = 1 + (p.data.transitPulse - 1) * Math.sin(Math.PI * (depth / (p.data.radius**2 / starRadius**2))); p.atmosphere.scale.setScalar(pulseScale); } else { p.atmosphere.scale.setScalar(1.0); } }); currentBrightness = Math.max(0.0, currentBrightness); if(isTransiting){ui.status.innerHTML=`<span class="highlight">Transit In Progress</span>`;ui.transitingPlanet.textContent=transitingPlanetName}else{ui.status.innerHTML='Orbiting';ui.transitingPlanet.textContent="None"} ui.lightBar.style.height=`${currentBrightness*100}%`;ui.lightBar.style.backgroundColor=`rgb(255,${Math.floor(180+currentBrightness*75)},30)`; } else { ui.status.innerHTML='Observing Anomaly'; ui.transitingPlanet.textContent="N/A"; ui.lightBar.style.height='0%'; }
+
+                 updateLabels(); // Update labels remains same
+                 composer.render(delta); // Render scene remains same
+
+             } catch (error) { console.error("Error during animation loop:", error); isAnimating = false; if (ui.loadingText && ui.loadingOverlay && !ui.loadingOverlay.classList.contains('hidden')) { ui.loadingOverlay.classList.remove('hidden'); ui.loadingText.textContent = "Animation Error! Check Console."; ui.loadingText.style.color = "red"; const loader = document.querySelector('.loader'); if(loader) loader.style.display = 'none'; } }
+        }
+
+        // --- Initialize Simulation ---
+        init();
+    </script>
+</body>
+</html>
